@@ -6,9 +6,11 @@ import 'package:path/path.dart' as p;
 
 import '../folders/folder_ops.dart';
 import '../folders/folder_tree.dart';
+import '../folders/root_watch.dart';
 import '../search/text_search.dart';
 import '../settings/app_settings.dart';
 import 'chapter_screen.dart';
+import 'conflict_banner.dart';
 import 'folder_dialogs.dart';
 import 'reorder_screen.dart';
 import 'search_screen.dart';
@@ -25,11 +27,16 @@ class FolderTreeScreen extends StatefulWidget {
     required this.rootPath,
     required this.settings,
     required this.onChangeRoot,
+    this.createWatch,
   });
 
   final String rootPath;
   final AppSettings settings;
   final VoidCallback onChangeRoot;
+
+  /// Starts watching the root folder for as long as this screen lives. Without
+  /// it, the tree only changes through what's done here.
+  final RootWatch Function(String rootPath)? createWatch;
 
   @override
   State<FolderTreeScreen> createState() => _FolderTreeScreenState();
@@ -40,10 +47,46 @@ class _FolderTreeScreenState extends State<FolderTreeScreen> {
   final _expanded = <String>{};
   final _search = SearchSession();
 
+  RootWatch? _watch;
+  StreamSubscription<void>? _changes;
+  bool _reloadPending = false;
+
   @override
   void initState() {
     super.initState();
+    _watch = widget.createWatch?.call(widget.rootPath);
+    _changes = _watch?.changes.listen((_) => _onDiskChanged());
     _resumeLastChapter();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Also runs whenever the screen above this one closes.
+    final isCurrent = ModalRoute.isCurrentOf(context) ?? true;
+    if (isCurrent && _reloadPending) {
+      _reloadPending = false;
+      scheduleMicrotask(() {
+        if (mounted) unawaited(_reloadQuietly());
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    unawaited(_changes?.cancel());
+    _watch?.dispose();
+    super.dispose();
+  }
+
+  /// A dialog or another screen may be working from the tree as it is now, so
+  /// the new one waits until that's closed.
+  void _onDiskChanged() {
+    if (ModalRoute.isCurrentOf(context) ?? true) {
+      unawaited(_reloadQuietly());
+    } else {
+      _reloadPending = true;
+    }
   }
 
   /// Goes straight back to the chapter being read. If it's gone or can't be
@@ -93,6 +136,7 @@ class _FolderTreeScreenState extends State<FolderTreeScreen> {
           settings: widget.settings,
           search: _search,
           match: match,
+          watch: _watch,
         ),
       ),
     );
@@ -411,7 +455,12 @@ class _FolderTreeScreenState extends State<FolderTreeScreen> {
                 ),
             ],
           ),
-          body: _body(snapshot, lastPath),
+          body: Column(
+            children: [
+              ConflictBanner(watch: _watch),
+              Expanded(child: _body(snapshot, lastPath)),
+            ],
+          ),
         );
       },
     );

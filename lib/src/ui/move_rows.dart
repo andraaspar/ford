@@ -58,6 +58,8 @@ Future<void> moveSelectedRows(
   if (!context.mounted) return;
 
   final rows = editor.selectedRows;
+  // The file may have changed meanwhile, taking the selected rows with it.
+  if (rows.isEmpty) return;
   final left = editor.chapterWithoutSelected;
   final movesTitle = rows.first.id == editor.chapter.segments.first.id;
   final destinationHasRows = destination.rowCount > 0;

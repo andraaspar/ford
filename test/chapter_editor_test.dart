@@ -226,6 +226,7 @@ void main() {
       saver = ChapterAutosaver(
         editor,
         file,
+        diskText: 'original',
         delay: const Duration(milliseconds: 20),
       );
     });
@@ -264,14 +265,14 @@ void main() {
     });
 
     test('reports a failed save and recovers on retry', () async {
-      final path = dir.path;
-      dir.deleteSync(recursive: true);
+      // A folder in place of the temp file makes the save fail.
+      final blocker = Directory('${dir.path}/.01.txt.tmp')..createSync();
       editor.setText('a', Field.target, 'x');
       await saver.flush();
       expect(saver.error, isNotNull);
       expect(saver.isUpToDate, isFalse);
 
-      Directory(path).createSync();
+      blocker.deleteSync();
       await saver.flush();
       expect(saver.error, isNull);
       expect(saver.isUpToDate, isTrue);

@@ -1,6 +1,6 @@
 # ford
 
-Parallel translation editor. The plan is in [plan.md](plan.md).
+Parallel translation editor.
 
 ## Requirements
 

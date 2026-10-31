@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../folders/root_watch.dart';
 import '../settings/app_settings.dart';
 import 'folder_picker_screen.dart';
 import 'folder_tree_screen.dart';
@@ -94,6 +95,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       rootPath: rootPath,
       settings: widget.settings,
       onChangeRoot: _pickRoot,
+      createWatch: RootWatch.new,
     );
   }
 }

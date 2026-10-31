@@ -687,7 +687,7 @@ void main() {
     Future<void> settle(WidgetTester tester, [Widget? widget]) async {
       await tester.runAsync(() async {
         if (widget != null) await tester.pumpWidget(widget);
-        for (var i = 0; i < 8; i++) {
+        for (var i = 0; i < 20; i++) {
           await Future<void>.delayed(const Duration(milliseconds: 20));
           await tester.pump(const Duration(milliseconds: 100));
         }

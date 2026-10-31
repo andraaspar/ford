@@ -4,15 +4,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../folders/folder_tree.dart';
+import '../folders/root_watch.dart';
 import '../editing/chapter_autosaver.dart';
 import '../editing/chapter_editor.dart';
 import '../model/chapter_format.dart';
 import '../search/text_search.dart';
 import '../settings/app_settings.dart';
 import 'chapter_view.dart';
+import 'conflict_banner.dart';
+import 'folder_dialogs.dart';
 import 'move_rows.dart';
 import 'row_menu.dart';
 import 'search_screen.dart';
+
+enum _ConflictChoice { keepMine, takeTheirs, saveCopy }
 
 /// Loads one chapter file for editing, saving the text and the reading position
 /// as they change.
@@ -28,6 +33,7 @@ class ChapterScreen extends StatefulWidget {
     required this.settings,
     required this.search,
     this.match,
+    this.watch,
   });
 
   final ChapterEntry entry;
@@ -38,6 +44,9 @@ class ChapterScreen extends StatefulWidget {
   /// A search result to go to, instead of the place the user left off.
   final SearchHit? match;
 
+  /// Tells when files under the root folder change.
+  final RootWatch? watch;
+
   @override
   State<ChapterScreen> createState() => _ChapterScreenState();
 }
@@ -46,38 +55,68 @@ class _ChapterScreenState extends State<ChapterScreen>
     with WidgetsBindingObserver {
   static const _saveDelay = Duration(milliseconds: 500);
 
-  late final Future<ParseResult> _loaded = widget.entry.file
-      .readAsString()
-      .then(ChapterFormat.parse)
-      .then((parsed) {
-        final editor = ChapterEditor(parsed.chapter);
-        _editor = editor;
-        _saver = ChapterAutosaver(editor, widget.entry.file);
-        final match = widget.match;
-        if (match != null) _showMatch(editor, match);
-        return parsed;
-      });
+  late final Future<void> _loaded = widget.entry.file.readAsString().then((
+    text,
+  ) {
+    final parsed = ChapterFormat.parse(text);
+    final editor = ChapterEditor(parsed.chapter);
+    final saver = ChapterAutosaver(
+      editor,
+      widget.entry.file,
+      diskText: text,
+      warnings: parsed.warnings,
+    );
+    saver.addListener(_promptIfConflict);
+    _editor = editor;
+    _saver = saver;
+    final match = widget.match;
+    if (match != null) _showMatch(editor, match);
+    if (_checkPending) _checkDisk();
+  });
 
   ChapterEditor? _editor;
   ChapterAutosaver? _saver;
   Timer? _saveTimer;
   ReadingPosition? _unsaved;
+  StreamSubscription<void>? _diskChanges;
+  bool _checkPending = false;
+  bool _prompting = false;
 
   String get _path => widget.entry.file.path;
+
+  /// Whether nothing is open on top of this screen. A dialog or another screen
+  /// may be working from the rows as they are now.
+  bool get _isCurrent => ModalRoute.isCurrentOf(context) ?? true;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _diskChanges = widget.watch?.changes.listen((_) => _checkDisk());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Also runs whenever something on top of this screen closes.
+    if (_isCurrent) {
+      scheduleMicrotask(() {
+        if (!mounted) return;
+        if (_checkPending) _checkDisk();
+        _promptIfConflict();
+      });
+    }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    unawaited(_diskChanges?.cancel());
     _savePosition();
     final editor = _editor;
     final saver = _saver;
     if (editor != null && saver != null) {
+      saver.removeListener(_promptIfConflict);
       unawaited(
         saver.flush().whenComplete(() {
           saver.dispose();
@@ -88,12 +127,140 @@ class _ChapterScreenState extends State<ChapterScreen>
     super.dispose();
   }
 
-  // The app can be killed at any time once it's in the background.
+  // The app can be killed at any time once it's in the background, and the file
+  // may have changed by the time it comes back.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state != AppLifecycleState.resumed) {
+    if (state == AppLifecycleState.resumed) {
+      _checkDisk();
+    } else {
       _savePosition();
       unawaited(_saver?.flush());
+    }
+  }
+
+  /// Follows changes to the file, once nothing is open on top of this screen.
+  void _checkDisk() {
+    final saver = _saver;
+    if (saver == null || !mounted || !_isCurrent) {
+      _checkPending = true;
+      return;
+    }
+    _checkPending = false;
+    unawaited(saver.checkDisk());
+  }
+
+  void _promptIfConflict() {
+    final saver = _saver;
+    final conflict = saver?.conflict;
+    if (saver == null || conflict == null) return;
+    if (_prompting || !mounted || !_isCurrent) return;
+    _prompting = true;
+    final prompt = conflict.isDeleted
+        ? _promptDeleted(saver)
+        : _promptChanged(saver);
+    unawaited(prompt.whenComplete(() => _prompting = false));
+  }
+
+  Future<void> _promptChanged(ChapterAutosaver saver) async {
+    final choice = await showDialog<_ConflictChoice>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => PopScope(
+        canPop: false,
+        child: AlertDialog(
+          title: const Text('This chapter changed elsewhere'),
+          content: const SingleChildScrollView(
+            child: Text(
+              'Another device or program changed this file while you had edits '
+              'that weren\'t saved yet.\n\n'
+              'Keep mine: your version replaces the other one.\n\n'
+              'Take theirs: your latest edits are dropped, and undo history for '
+              'this chapter ends here.\n\n'
+              'Save mine as a copy: your version goes to a new file beside this '
+              'one, and this chapter shows the other version.',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () =>
+                  Navigator.of(context).pop(_ConflictChoice.saveCopy),
+              child: const Text('Save mine as a copy'),
+            ),
+            TextButton(
+              onPressed: () =>
+                  Navigator.of(context).pop(_ConflictChoice.takeTheirs),
+              child: const Text('Take theirs'),
+            ),
+            FilledButton(
+              onPressed: () =>
+                  Navigator.of(context).pop(_ConflictChoice.keepMine),
+              child: const Text('Keep mine'),
+            ),
+          ],
+        ),
+      ),
+    );
+    switch (choice) {
+      case _ConflictChoice.keepMine:
+        unawaited(saver.keepMine());
+      case _ConflictChoice.takeTheirs:
+        saver.takeTheirs();
+      case _ConflictChoice.saveCopy:
+        await _saveCopy(saver);
+      case null:
+        break;
+    }
+  }
+
+  Future<void> _saveCopy(ChapterAutosaver saver) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final name = await saver.saveMineAsCopy();
+      messenger.showSnackBar(
+        SnackBar(content: Text('Your version was saved as $name')),
+      );
+    } on Object catch (e) {
+      if (!mounted) return;
+      await showFolderError(context, e);
+      // The question is still open. This runs once the current prompt has ended.
+      scheduleMicrotask(_promptIfConflict);
+    }
+  }
+
+  Future<void> _promptDeleted(ChapterAutosaver saver) async {
+    final navigator = Navigator.of(context);
+    final keep = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => PopScope(
+        canPop: false,
+        child: AlertDialog(
+          title: const Text('This chapter\'s file is gone'),
+          content: const SingleChildScrollView(
+            child: Text(
+              'Another device or program deleted or moved this file.\n\n'
+              'Keep mine: the file is written again from what\'s open here.\n\n'
+              'Close chapter: what\'s open here is dropped.',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Close chapter'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Keep mine'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (keep ?? false) {
+      unawaited(saver.keepMine());
+    } else {
+      navigator.pop();
     }
   }
 
@@ -177,6 +344,8 @@ class _ChapterScreenState extends State<ChapterScreen>
   /// Saves, and only allows leaving unsaved edits behind if the user says so.
   Future<bool> _mayLeave(ChapterAutosaver saver) async {
     await saver.flush();
+    // The user has that question to answer first.
+    if (saver.conflict != null) return false;
     if (saver.isUpToDate) return true;
     if (!mounted) return false;
     final leave = await showDialog<bool>(
@@ -237,14 +406,12 @@ class _ChapterScreenState extends State<ChapterScreen>
     return FutureBuilder(
       future: _loaded,
       builder: (context, snapshot) {
-        final parsed = snapshot.data;
         final editor = _editor;
         final saver = _saver;
-        if (parsed != null && editor != null && saver != null) {
+        if (editor != null && saver != null) {
           return ListenableBuilder(
             listenable: Listenable.merge([editor, saver]),
-            builder: (context, _) =>
-                _editorScreen(editor, saver, parsed.warnings),
+            builder: (context, _) => _editorScreen(editor, saver),
           );
         }
         return Scaffold(
@@ -264,12 +431,9 @@ class _ChapterScreenState extends State<ChapterScreen>
     );
   }
 
-  Widget _editorScreen(
-    ChapterEditor editor,
-    ChapterAutosaver saver,
-    List<String> warnings,
-  ) {
+  Widget _editorScreen(ChapterEditor editor, ChapterAutosaver saver) {
     final active = editor.active;
+    final warnings = saver.warnings;
     return PopScope(
       canPop: active == null && !editor.isSelecting && saver.isUpToDate,
       onPopInvokedWithResult: (didPop, _) {
@@ -354,10 +518,21 @@ class _ChapterScreenState extends State<ChapterScreen>
                       ],
                     ],
                   ),
-            body: ChapterView(
-              editor: editor,
-              initialPosition: widget.settings.position(_path),
-              onPositionChanged: _onPositionChanged,
+            body: Column(
+              children: [
+                Expanded(
+                  child: ChapterView(
+                    editor: editor,
+                    initialPosition: widget.settings.position(_path),
+                    onPositionChanged: _onPositionChanged,
+                  ),
+                ),
+                // Below the list, so that the rows don't move when it appears.
+                SafeArea(
+                  top: false,
+                  child: ConflictBanner(watch: widget.watch),
+                ),
+              ],
             ),
           ),
         ),

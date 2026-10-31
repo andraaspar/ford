@@ -349,6 +349,37 @@ class ChapterEditor extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Replaces the chapter with what its file now holds. Rows are matched by ID,
+  /// so the view stays where it is, and an open cell stays open if its row is
+  /// still there.
+  ///
+  /// Any earlier version in the undo history lacks the change that came in, and
+  /// going back to one would quietly overwrite it. That's why the history ends
+  /// here.
+  void replaceFromDisk(Chapter next) {
+    _chapter = next;
+    _mark = null;
+    _typingCell = null;
+    _undo.clear();
+    _redo.clear();
+    _selected.retainWhere((id) => next.indexOfId(id) >= 0);
+    final active = _active;
+    if (active != null) {
+      final index = next.indexOfId(active.rowId);
+      if (index < 0) {
+        _active = null;
+      } else {
+        final length = next.segments[index].field(active.field).length;
+        _active = ActiveCell(
+          active.rowId,
+          active.field,
+          active.offset.clamp(0, length),
+        );
+      }
+    }
+    notifyListeners();
+  }
+
   void undo() {
     if (_undo.isEmpty) return;
     _redo.add(_chapter);
