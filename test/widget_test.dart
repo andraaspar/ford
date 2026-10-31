@@ -2,14 +2,14 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ford/src/book/book_folder.dart';
+import 'package:ford/src/folders/folder_tree.dart';
 import 'package:ford/src/editing/chapter_editor.dart';
 import 'package:ford/src/model/chapter.dart';
 import 'package:ford/src/model/segment.dart';
 import 'package:ford/src/settings/app_settings.dart';
-import 'package:ford/src/ui/chapter_list_screen.dart';
 import 'package:ford/src/ui/chapter_view.dart';
 import 'package:ford/src/ui/folder_picker_screen.dart';
+import 'package:ford/src/ui/folder_tree_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 Widget _app(Widget child) => MaterialApp(home: Scaffold(body: child));
@@ -159,7 +159,7 @@ void main() {
     });
   });
 
-  group('ChapterListScreen', () {
+  group('FolderTreeScreen', () {
     late Directory dir;
     late AppSettings settings;
 
@@ -187,10 +187,10 @@ void main() {
     }
 
     Widget list() => MaterialApp(
-      home: ChapterListScreen(
-        book: BookFolder(dir.path),
+      home: FolderTreeScreen(
+        rootPath: dir.path,
         settings: settings,
-        onChangeBook: () {},
+        onChangeRoot: () {},
       ),
     );
 
@@ -264,10 +264,10 @@ void main() {
     expect(lastRowBottom, lessThanOrEqualTo(viewportBottom - 48));
   });
 
-  group('BookFolder', () {
+  group('FolderTree', () {
     late Directory dir;
 
-    setUp(() => dir = Directory.systemTemp.createTempSync('ford_book_'));
+    setUp(() => dir = Directory.systemTemp.createTempSync('ford_tree_'));
     tearDown(() => dir.deleteSync(recursive: true));
 
     test('lists chapters in natural order, skipping other files', () async {
@@ -281,7 +281,7 @@ void main() {
         File('${dir.path}/$name').writeAsStringSync('@ a1b2c\n< T $name\n>\n');
       }
 
-      final chapters = await BookFolder(dir.path).listChapters();
+      final chapters = (await FolderTree.load(dir.path)).chapters.toList();
 
       expect(chapters.map((c) => c.fileName), ['2.txt', '10.txt']);
       expect(chapters.first.title, 'T 2.txt');
@@ -290,7 +290,7 @@ void main() {
     test('keeps an unreadable file in the list, with an error', () async {
       File('${dir.path}/01.txt').writeAsBytesSync([0xFF, 0xFE, 0xFF]);
 
-      final chapters = await BookFolder(dir.path).listChapters();
+      final chapters = (await FolderTree.load(dir.path)).chapters;
 
       expect(chapters.single.error, isNotNull);
       expect(chapters.single.title, isNull);

@@ -1,5 +1,8 @@
 /// Compares strings so that embedded numbers sort numerically:
 /// `2.txt` < `10.txt`.
+///
+/// Only equal strings compare as 0, so a sorted list of names has one possible
+/// order (`02.txt` comes before `2.txt`).
 int naturalCompare(String a, String b) {
   final re = RegExp(r'\d+|\D+');
   final pa = re.allMatches(a).map((m) => m[0]!).toList();
@@ -14,6 +17,6 @@ int naturalCompare(String a, String b) {
         : x.toLowerCase().compareTo(y.toLowerCase());
     if (c != 0) return c;
   }
-  return pa.length.compareTo(pb.length);
+  final c = pa.length.compareTo(pb.length);
+  return c != 0 ? c : a.compareTo(b);
 }
-

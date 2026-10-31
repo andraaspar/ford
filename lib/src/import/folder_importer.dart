@@ -13,8 +13,8 @@ class ChapterImport {
 }
 
 /// Converts a folder of Obsidian chapter files (`1.md`, `2.md`, ...) into a
-/// book folder of chapter files (`01.txt`, `02.txt`, ...).
-class BookImporter {
+/// folder of chapter files (`01.txt`, `02.txt`, ...).
+class FolderImporter {
   static const chapterExtension = '.txt';
 
   /// Reads and converts every `.md` file in [sourceDir], in natural order.
@@ -59,4 +59,3 @@ class BookImporter {
     }
   }
 }
-

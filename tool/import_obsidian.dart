@@ -1,4 +1,4 @@
-// Command-line import of an Obsidian book folder.
+// Command-line import of a folder of Obsidian chapter files.
 //
 // Usage:
 //   dart run tool/import_obsidian.dart <source-folder> [<target-folder>]
@@ -6,7 +6,7 @@
 // Without a target folder only a dry-run report is printed.
 import 'dart:io';
 
-import 'package:ford/src/import/book_importer.dart';
+import 'package:ford/src/import/folder_importer.dart';
 
 Future<void> main(List<String> args) async {
   if (args.isEmpty || args.length > 2) {
@@ -15,7 +15,7 @@ Future<void> main(List<String> args) async {
     );
     exit(64);
   }
-  final imports = await BookImporter.dryRun(Directory(args[0]));
+  final imports = await FolderImporter.dryRun(Directory(args[0]));
   var rows = 0, blank = 0, untranslated = 0, warnings = 0;
   for (final i in imports) {
     final segs = i.result.chapter.segments;
@@ -41,10 +41,9 @@ Future<void> main(List<String> args) async {
     '$untranslated untranslated, $warnings warnings.',
   );
   if (args.length == 2) {
-    await BookImporter.write(imports, Directory(args[1]));
+    await FolderImporter.write(imports, Directory(args[1]));
     stdout.writeln('Written to ${args[1]}');
   } else {
     stdout.writeln('Dry run: nothing written.');
   }
 }
-

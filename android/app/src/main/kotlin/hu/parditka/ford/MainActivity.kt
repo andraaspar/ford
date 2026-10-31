@@ -1,4 +1,4 @@
-package com.andraaspar.ford
+package hu.parditka.ford
 
 import io.flutter.embedding.android.FlutterActivity
 

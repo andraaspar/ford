@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../book/book_folder.dart';
+import '../folders/folder_tree.dart';
 import '../editing/chapter_autosaver.dart';
 import '../editing/chapter_editor.dart';
 import '../model/chapter_format.dart';

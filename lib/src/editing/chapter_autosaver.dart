@@ -2,8 +2,8 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:path/path.dart' as p;
 
+import '../folders/atomic_write.dart';
 import '../model/chapter.dart';
 import '../model/chapter_format.dart';
 import 'chapter_editor.dart';
@@ -56,7 +56,7 @@ class ChapterAutosaver extends ChangeNotifier {
     while (!isUpToDate) {
       final chapter = _editor.chapter;
       try {
-        await _writeAtomically(ChapterFormat.serialize(chapter));
+        await writeAtomically(_file, ChapterFormat.serialize(chapter));
       } on Object catch (e) {
         _error = e;
         notifyListeners();
@@ -68,16 +68,6 @@ class ChapterAutosaver extends ChangeNotifier {
         notifyListeners();
       }
     }
-  }
-
-  /// Syncthing or a crash must never see a half-written chapter, so the text
-  /// goes to a hidden temp file that then replaces the real one.
-  Future<void> _writeAtomically(String content) async {
-    final temp = File(
-      p.join(p.dirname(_file.path), '.${p.basename(_file.path)}.tmp'),
-    );
-    await temp.writeAsString(content, flush: true);
-    await temp.rename(_file.path);
   }
 
   @override

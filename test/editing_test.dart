@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ford/src/book/book_folder.dart';
+import 'package:ford/src/folders/folder_tree.dart';
 import 'package:ford/src/editing/chapter_editor.dart';
 import 'package:ford/src/model/chapter.dart';
 import 'package:ford/src/model/chapter_format.dart';

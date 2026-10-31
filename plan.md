@@ -95,12 +95,14 @@ The chapter list becomes a tree of folders and chapters, showing each folder's d
 | Action | Behaviour |
 |---|---|
 | **Create** | Asks for a display name, then creates the folder and a first file (`00.txt`) with that name as its title row. The name on disk is generated and doesn't depend on the display name. |
+| **New chapter** | Asks for a title, then adds a chapter to the folder under the next free number. |
 | **Edit** | Changing the display name edits the title row of the first file, on the source and target sides. The folder isn't renamed on disk. |
-| **Reorganize** | Reorder chapters and folders within a folder, or move them to another folder. Order comes from names on disk, so the app renames the files and folders it needs to. Open edits are saved first, and saved per-chapter positions follow the move. |
-| **Delete** | Always asks for confirmation first, stating the folder's display name and how many chapters and nested folders will go with it. Syncthing passes the deletion on to the other devices. |
+| **Reorganize** | Drag chapters and folders into a new order within a folder, or move them to another folder, where they go after what's there. Order comes from names on disk, so the app renames the files and folders it needs to. Open edits are saved first, because the tree is only reachable once a chapter has closed, and saved per-chapter positions follow the move. |
+| **Delete** | Always asks for confirmation first, stating the folder's display name and how many chapters, nested folders and other files will go with it. Chapters can be deleted the same way. Syncthing passes the deletion on to the other devices. |
 
 - **Fallback name:** a folder with no file directly inside it, or whose first file has an empty title row, shows its name on disk, marked as unnamed.
-- **The first file decides the display name.** If moving, reordering or adding a file would make a different file first, the app warns about the display name that would result.
+- **Renaming for order:** the numbers at the start of names are handed out again in the new order, so only entries between the old and new place change, and the rest of a name stays with its entry. A name that doesn't start with a number gets one in front of it (`Beta/` becomes `01 Beta/`), so an unnamed folder stays recognizable.
+- **The first file decides the display name.** If moving, reordering, deleting or adding a file would make a different file first, the app warns about the display name that would result.
 - **Folders whose first file is a real chapter** (such as those imported earlier) show that chapter's title as their display name. An **Add name** action adds a new `00.txt` in front, so the chapter's title stays as it is.
 
 ### Choosing targets
@@ -135,7 +137,7 @@ Sample dry run on *Az új nap könyve*: 22 chapters, 6,056 rows, 1,769 blank, 1,
 2. ✅ **Importer** with tests based on the real sample, plus the CLI tool.
 3. ✅ **Read-only viewer:** pick the folder, list chapters, side-by-side list with break rows, remember the scroll position, reopen the last chapter on launch.
 4. ✅ **Editing:** edit cells in place, autosave, split / join / insert / delete, remarks, undo. Being tested by hand on the phone.
-5. **Folders:** nested folder tree with display names read from the first file; create, edit, reorganize and delete; the shared target picker. Replace "book" with "folder" in the code and UI.
+5. ✅ **Folders:** nested folder tree with display names read from the first file; create, edit, reorganize and delete; the shared target picker. "Book" is replaced with "folder" in the code and UI. Not yet tested by hand on the phone.
 6. **Search,** using the target picker.
 7. **Sync robustness:** detect external changes, reload, show a conflict prompt and banner.
 8. **Polish & packaging:** settings, theme, signed APK to install on the phone, desktop build, import from inside the app. The folder picker should also point out un-imported Markdown files instead of only showing "0 chapter files".
@@ -147,6 +149,8 @@ Sample dry run on *Az új nap könyve*: 22 chapters, 6,056 rows, 1,769 blank, 1,
 - Folders are called folders, never books or sections. Their roles are implied, not stored, for now.
 - A folder's display name comes from the first row of its first file, so a folder normally starts with a dedicated name file (`00.txt`). That file is otherwise an ordinary chapter and can hold more rows, such as a title page.
 - The root folder has no display name. Chapters directly inside it still work.
+- Any folder can be chosen as the root, including an empty one or one holding only folders.
+- Actions on the tree open from ⋮ on a row, a long press or a right-click; the root's are under ⋮ in the app bar.
 - Split keeps the new row in the same paragraph; breaks are separate blank rows.
 - Search has a match-case toggle.
 - Merging moves both sides. It asks first only if the other side of the row has text.

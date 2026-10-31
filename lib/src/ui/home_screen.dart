@@ -3,13 +3,12 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-import '../book/book_folder.dart';
 import '../settings/app_settings.dart';
-import 'chapter_list_screen.dart';
 import 'folder_picker_screen.dart';
+import 'folder_tree_screen.dart';
 
-/// Gets the app to a usable state: storage access first (Android), then a book
-/// folder, then the book's chapter list.
+/// Gets the app to a usable state: storage access first (Android), then a root
+/// folder, then the tree of folders and chapters inside it.
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.settings});
 
@@ -50,15 +49,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _pickBook() async {
+  Future<void> _pickRoot() async {
     final path = await Navigator.of(context).push<String>(
       MaterialPageRoute(
         builder: (_) =>
-            FolderPickerScreen(initialPath: widget.settings.bookPath),
+            FolderPickerScreen(initialPath: widget.settings.rootPath),
       ),
     );
     if (path != null) {
-      await widget.settings.setBookPath(path);
+      await widget.settings.setRootPath(path);
       if (mounted) setState(() {});
     }
   }
@@ -73,27 +72,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       return _Prompt(
         icon: Icons.folder_off_outlined,
         message:
-            'Ford reads and saves your book as plain files in your Syncthing '
+            'Ford reads and saves your translations as plain files in your Syncthing '
             'folder, so it needs the "All files access" permission.',
         action: 'Allow access',
         onPressed: Permission.manageExternalStorage.request,
       );
     }
-    final bookPath = widget.settings.bookPath;
-    if (bookPath == null) {
+    final rootPath = widget.settings.rootPath;
+    if (rootPath == null) {
       return _Prompt(
-        icon: Icons.menu_book_outlined,
-        message: 'Choose the folder that holds your book\'s chapter files.',
-        action: 'Choose book folder',
-        onPressed: _pickBook,
+        icon: Icons.folder_outlined,
+        message:
+            'Choose the root folder that holds your folders and chapter files.',
+        action: 'Choose root folder',
+        onPressed: _pickRoot,
       );
     }
-    return ChapterListScreen(
-      // A different book starts from a fresh list.
-      key: ValueKey(bookPath),
-      book: BookFolder(bookPath),
+    return FolderTreeScreen(
+      // A different root starts from a fresh tree.
+      key: ValueKey(rootPath),
+      rootPath: rootPath,
       settings: widget.settings,
-      onChangeBook: _pickBook,
+      onChangeRoot: _pickRoot,
     );
   }
 }

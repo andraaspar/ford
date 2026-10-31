@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
-import '../book/book_folder.dart';
+import '../folders/folder_tree.dart';
 import '../model/natural_sort.dart';
 
 /// Browses folders with plain file access. Pops with the chosen folder's path.
@@ -46,9 +46,9 @@ class _FolderPickerScreenState extends State<FolderPickerScreen> {
     try {
       await for (final entry in Directory(path).list(followLinks: false)) {
         final name = p.basename(entry.path);
-        if (entry is Directory && !name.startsWith('.')) {
+        if (entry is Directory && FolderTree.isFolderName(name)) {
           folders.add(entry.path);
-        } else if (entry is File && BookFolder.isChapterFileName(name)) {
+        } else if (entry is File && FolderTree.isChapterFileName(name)) {
           chapterCount++;
         }
       }
@@ -74,7 +74,7 @@ class _FolderPickerScreenState extends State<FolderPickerScreen> {
     final parent = p.dirname(path);
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Choose book folder')),
+      appBar: AppBar(title: const Text('Choose root folder')),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -122,7 +122,7 @@ class _FolderPickerScreenState extends State<FolderPickerScreen> {
                   ),
                   const SizedBox(width: 16),
                   FilledButton(
-                    onPressed: _chapterCount == 0
+                    onPressed: _error != null
                         ? null
                         : () => Navigator.of(context).pop(path),
                     child: const Text('Use this folder'),
