@@ -107,7 +107,7 @@ Sample dry run on *Az új nap könyve*: 22 chapters, 6,056 rows, 1,769 blank, 1,
 1. ✅ **Model + file format:** parser, serializer, row operations, unit tests.
 2. ✅ **Importer** with tests based on the real sample, plus the CLI tool.
 3. ✅ **Read-only viewer:** pick the book folder, list chapters, side-by-side list with break rows, remember the scroll position, reopen the last chapter on launch.
-4. ✅ **Editing:** edit cells in place, autosave, split / join / insert / delete, remarks, undo. Still to check on the phone: the keyboard stays up without flicker on Enter, and the view stays put when the keyboard opens.
+4. ✅ **Editing:** edit cells in place, autosave, split / join / insert / delete, remarks, undo. Checked on the phone: the keyboard stays up through splits, and the open cell stays visible above it. Still to check: Enter and typing on the real keyboard, and how smoothly the keyboard opens in a release build.
 5. **Search.**
 6. **Sync robustness:** detect external changes, reload, show a conflict prompt and banner.
 7. **Polish & packaging:** settings, theme, signed APK to install on the phone, desktop build, import from inside the app. The folder picker should also point out un-imported Markdown files instead of only showing "0 chapter files".
