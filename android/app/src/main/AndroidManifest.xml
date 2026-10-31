@@ -1,5 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Book files live in a Syncthing folder and are read with plain file access. -->
+    <!-- Book files live in a shared folder and are read with plain file access. -->
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
     <application
         android:label="ford"

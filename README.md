@@ -26,7 +26,7 @@ flutter build apk --release
 adb install -r build/app/outputs/flutter-apk/app-release.apk
 ```
 
-`-r` keeps the app's settings: the root folder, the last chapter and the reading positions. Your translations aren't affected either way, because they live in the Syncthing folder.
+`-r` keeps the app's settings: the root folder, the last chapter and the reading positions. Your translations aren't affected either way, because they live in the root folder, outside the app.
 
 The first time the app opens, it asks for "All files access". Allow it, then choose the root folder.
 

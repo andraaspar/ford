@@ -119,7 +119,7 @@ class FolderTree {
       !name.startsWith('.') &&
       !name.contains('.sync-conflict-');
 
-  /// Hidden folders, such as Syncthing's `.stversions`, aren't part of the tree.
+  /// Hidden folders aren't part of the tree.
   static bool isFolderName(String name) => !name.startsWith('.');
 
   /// Reads everything under [rootPath]. Throws if the root can't be listed. A

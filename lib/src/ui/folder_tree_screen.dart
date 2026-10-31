@@ -241,7 +241,6 @@ class _FolderTreeScreenState extends State<FolderTreeScreen> {
               'This deletes ${entry.fileName}.',
               for (final change in changes)
                 'The folder "${change.from}" would show as "${change.to}".',
-              _syncthingNote,
             ],
           );
           if (!confirmed) return;
@@ -251,7 +250,7 @@ class _FolderTreeScreenState extends State<FolderTreeScreen> {
           final confirmed = await confirmDeletion(
             context,
             title: 'Delete folder "${entry.label}"?',
-            details: [_describe(summary), _syncthingNote],
+            details: [_describe(summary)],
           );
           if (!confirmed) return;
       }
@@ -259,9 +258,6 @@ class _FolderTreeScreenState extends State<FolderTreeScreen> {
       await widget.settings.forget(entry.path);
     });
   }
-
-  static const _syncthingNote =
-      'Syncthing passes the deletion on to your other devices.';
 
   static String _describe(DeletionSummary summary) {
     String count(int n, String one, String many) => '$n ${n == 1 ? one : many}';

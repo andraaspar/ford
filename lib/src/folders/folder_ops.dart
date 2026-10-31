@@ -27,7 +27,7 @@ class DeletionSummary {
   final int chapters;
   final int folders;
 
-  /// Files that aren't chapters, such as notes or Syncthing conflict copies.
+  /// Files that aren't chapters, such as notes or conflict copies.
   final int otherFiles;
 }
 

@@ -72,8 +72,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       return _Prompt(
         icon: Icons.folder_off_outlined,
         message:
-            'Ford reads and saves your translations as plain files in your Syncthing '
-            'folder, so it needs the "All files access" permission.',
+            'Ford reads and saves your translations as plain files, so it needs '
+            'the "All files access" permission.',
         action: 'Allow access',
         onPressed: Permission.manageExternalStorage.request,
       );
