@@ -113,9 +113,12 @@ Search, import and export all choose their targets the same way, from the tree o
 - Import writes to one place, so it picks a single destination folder, or creates a new one.
 
 ### Search
-- Exact substring match, accents count. A **match case** toggle (off by default).
-- Scope: source / target / remarks / all; current chapter, current folder, or any selection of folders and chapters (see *Choosing targets*).
-- Results list with context and the display name of the folder each result is in; tapping one jumps to the row and highlights the match.
+- Exact substring match, accents count, and spaces in the search text count too. A **match case** toggle (off by default).
+- Scope: source / target / remarks / all; current chapter, current folder (with the folders inside it), or any selection of folders and chapters (see *Choosing targets*).
+- It opens from the 🔍 button on a chapter or the tree, or from **Search in this folder** in a folder's actions. Without a chapter open, the current folder is the first choice; at the top of the tree that's the root.
+- Results list with context, the display name of the folder and the chapter each result is in, and whether it's in the source, target or remark. Each occurrence is its own result. Tapping one jumps to the row and highlights the match, until the next edit.
+- The search covers an open chapter as it stands, including edits not saved yet. A file that can't be read is named above the results.
+- The search is remembered until the root folder changes, with its place in the list, so 🔍 goes back to the results.
 
 ### Import (Obsidian → folder)
 Input: one `.md` file per chapter (`1.md` … `22.md`), each a simple 3-column table:
@@ -140,7 +143,7 @@ Sample dry run on *Az új nap könyve*: 22 chapters, 6,056 rows, 1,769 blank, 1,
 3. ✅ **Read-only viewer:** pick the folder, list chapters, side-by-side list with break rows, remember the scroll position, reopen the last chapter on launch.
 4. ✅ **Editing:** edit cells in place, autosave, split / join / insert / delete, remarks, undo. Being tested by hand on the phone.
 5. ✅ **Folders:** nested folder tree with display names read from the first file; create, edit, reorganize and delete; the shared target picker. "Book" is replaced with "folder" in the code and UI. Not yet tested by hand on the phone.
-6. **Search,** using the target picker.
+6. ✅ **Search,** using the target picker. Not yet tested by hand on the phone.
 7. **Sync robustness:** detect external changes, reload, show a conflict prompt and banner.
 8. **Polish & packaging:** settings, theme, signed APK to install on the phone, desktop build, import from inside the app. The folder picker should also point out un-imported Markdown files instead of only showing "0 chapter files".
 
@@ -155,6 +158,8 @@ Sample dry run on *Az új nap könyve*: 22 chapters, 6,056 rows, 1,769 blank, 1,
 - Actions on the tree open from ⋮ on a row, a long press or a right-click; the root's are under ⋮ in the app bar.
 - Split keeps the new row in the same paragraph; breaks are separate blank rows.
 - Search has a match-case toggle.
+- Only one chapter screen is ever open, because two editors on one file would overwrite each other. A result in another chapter saves and closes the current one, then opens that one, so Back goes to the tree and 🔍 goes back to the results.
+- Search reads the files each time instead of keeping an index. On the sample book that takes about 30 ms on the desktop, so an index isn't needed.
 - Merging moves both sides. It asks first only if the other side of the row has text.
 - The keyboard slides over the list instead of resizing it, because resizing lays out many rows per animation frame.
 - On launch the app reopens the last chapter at the saved row; Back goes to the chapter list.

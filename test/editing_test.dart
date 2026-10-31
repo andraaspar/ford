@@ -11,6 +11,7 @@ import 'package:ford/src/model/segment.dart';
 import 'package:ford/src/settings/app_settings.dart';
 import 'package:ford/src/ui/chapter_screen.dart';
 import 'package:ford/src/ui/chapter_view.dart';
+import 'package:ford/src/ui/search_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 Widget _app(ChapterEditor editor, {String? startAt}) => MaterialApp(
@@ -700,6 +701,7 @@ void main() {
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute<void>(
                 builder: (_) => ChapterScreen(
+                  search: SearchSession(),
                   entry: ChapterEntry(file: file, title: null),
                   rootPath: file.parent.path,
                   settings: settings,

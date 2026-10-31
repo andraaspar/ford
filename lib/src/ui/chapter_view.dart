@@ -8,6 +8,7 @@ import '../editing/chapter_editor.dart';
 import '../model/chapter.dart';
 import '../model/segment.dart';
 import '../settings/app_settings.dart';
+import 'highlighted_text.dart';
 import 'row_menu.dart';
 
 /// The side-by-side list of rows, editable in place.
@@ -54,11 +55,18 @@ class _ChapterViewState extends State<ChapterView> {
   void initState() {
     super.initState();
     _shown = _editor.chapter;
+    // Something to show right away goes before the place the user left off.
+    final reveal = _editor.takeReveal();
     final saved = widget.initialPosition;
     // The row may be gone if the file changed; then start from the top.
     final index = saved == null ? -1 : _shown.indexOfId(saved.rowId);
-    _initialIndex = index < 0 ? 0 : index;
-    _initialAlignment = index < 0 ? 0 : saved!.alignment;
+    if (reveal != null) {
+      _initialIndex = reveal.index;
+      _initialAlignment = _revealAlignment;
+    } else {
+      _initialIndex = index < 0 ? 0 : index;
+      _initialAlignment = index < 0 ? 0 : saved!.alignment;
+    }
     _center = _initialIndex;
     _positions.itemPositions.addListener(_reportPosition);
     _editor.addListener(_onEditorChanged);
@@ -260,6 +268,7 @@ class RowTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final active = editor.active?.rowId == segment.id ? editor.active : null;
+    final mark = editor.mark?.rowId == segment.id ? editor.mark : null;
     final selecting = editor.isSelecting;
     final colors = Theme.of(context).colorScheme;
     return GestureDetector(
@@ -281,7 +290,7 @@ class RowTile extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _sides(context, active),
+              _sides(context, active, mark),
               if (active?.field == Field.remark)
                 _RemarkEditor(
                   key: ValueKey('${segment.id}/remark'),
@@ -292,8 +301,13 @@ class RowTile extends StatelessWidget {
               else if (segment.hasRemark)
                 _Remark(
                   text: segment.remark,
-                  // A remark being read while its row is edited stays open.
-                  collapsed: remarkCollapsed && active == null,
+                  mark: mark?.field == Field.remark ? mark : null,
+                  // A remark being read while its row is edited stays open, and
+                  // so does one holding a match.
+                  collapsed:
+                      remarkCollapsed &&
+                      active == null &&
+                      mark?.field != Field.remark,
                   onTap: onToggleRemark,
                 ),
               Divider(height: 1, thickness: 1, color: colors.outlineVariant),
@@ -312,7 +326,7 @@ class RowTile extends StatelessWidget {
     }
   }
 
-  Widget _sides(BuildContext context, ActiveCell? active) {
+  Widget _sides(BuildContext context, ActiveCell? active, TextMark? mark) {
     final theme = Theme.of(context);
     final style = isTitle
         ? theme.textTheme.titleMedium
@@ -333,6 +347,7 @@ class RowTile extends StatelessWidget {
         text: segment.field(field),
         style: style,
         background: background,
+        mark: mark?.field == field ? mark : null,
         onTapAt: (offset) => _activate(field, offset),
       );
     }
@@ -366,11 +381,13 @@ class _Cell extends StatelessWidget {
     required this.onTapAt,
     this.style,
     this.background,
+    this.mark,
   });
 
   final String text;
   final TextStyle? style;
   final Color? background;
+  final TextMark? mark;
 
   /// Called with the text offset that was tapped.
   final ValueChanged<int> onTapAt;
@@ -400,7 +417,13 @@ class _Cell extends StatelessWidget {
         color: background ?? Colors.transparent,
         child: Padding(
           padding: _cellPadding,
-          child: Text(text, style: style),
+          child: switch (mark) {
+            null => Text(text, style: style),
+            final mark => Text.rich(
+              highlightedSpan(context, text, mark.start, mark.end),
+              style: style,
+            ),
+          },
         ),
       ),
     );
@@ -683,20 +706,31 @@ class _Remark extends StatelessWidget {
     required this.text,
     required this.collapsed,
     required this.onTap,
+    this.mark,
   });
 
   final String text;
   final bool collapsed;
+  final TextMark? mark;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    const marker = '💬 ';
+    final mark = this.mark;
     return InkWell(
       onTap: onTap,
       child: Padding(
         padding: _remarkPadding,
-        child: Text(
-          '💬 $text',
+        child: Text.rich(
+          mark == null
+              ? TextSpan(text: '$marker$text')
+              : highlightedSpan(
+                  context,
+                  '$marker$text',
+                  marker.length + mark.start,
+                  marker.length + mark.end,
+                ),
           maxLines: collapsed ? 1 : null,
           overflow: collapsed ? TextOverflow.ellipsis : null,
           style: _remarkStyle(Theme.of(context)),

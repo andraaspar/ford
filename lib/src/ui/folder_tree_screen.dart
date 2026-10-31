@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -5,10 +6,12 @@ import 'package:path/path.dart' as p;
 
 import '../folders/folder_ops.dart';
 import '../folders/folder_tree.dart';
+import '../search/text_search.dart';
 import '../settings/app_settings.dart';
 import 'chapter_screen.dart';
 import 'folder_dialogs.dart';
 import 'reorder_screen.dart';
+import 'search_screen.dart';
 import 'target_picker_screen.dart';
 import 'tree_row.dart';
 
@@ -35,6 +38,7 @@ class FolderTreeScreen extends StatefulWidget {
 class _FolderTreeScreenState extends State<FolderTreeScreen> {
   late Future<FolderEntry> _tree = FolderTree.load(widget.rootPath);
   final _expanded = <String>{};
+  final _search = SearchSession();
 
   @override
   void initState() {
@@ -75,24 +79,47 @@ class _FolderTreeScreenState extends State<FolderTreeScreen> {
     }
   }
 
-  Future<void> _open(ChapterEntry entry) async {
+  Future<void> _open(ChapterEntry entry, {SearchHit? match}) async {
     await widget.settings.setLastChapter(
       widget.rootPath,
       p.relative(entry.path, from: widget.rootPath),
     );
     if (!mounted) return;
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
+    final next = await Navigator.of(context).push<SearchHit>(
+      MaterialPageRoute(
         builder: (_) => ChapterScreen(
           entry: entry,
           rootPath: widget.rootPath,
           settings: widget.settings,
+          search: _search,
+          match: match,
         ),
       ),
     );
     if (!mounted) return;
     // The last-read marker may have moved, and the title may have been edited.
-    await _reloadQuietly();
+    unawaited(_reloadQuietly());
+    if (next != null) await _openMatch(next);
+  }
+
+  Future<void> _openMatch(SearchHit hit) async {
+    setState(() => expandAround(hit.chapter, _expanded));
+    await _open(hit.chapter, match: hit);
+  }
+
+  /// Searches the root folder, or [folder] if there is one.
+  Future<void> _startSearch([FolderEntry? folder]) async {
+    if (folder != null) _search.target = SearchTarget.folder;
+    final hit = await Navigator.of(context).push<SearchHit>(
+      MaterialPageRoute(
+        builder: (_) => SearchScreen(
+          rootPath: widget.rootPath,
+          session: _search,
+          folderPath: folder?.path,
+        ),
+      ),
+    );
+    if (hit != null && mounted) await _openMatch(hit);
   }
 
   /// Runs an action, then shows the tree as it now is, whether or not it worked.
@@ -107,6 +134,7 @@ class _FolderTreeScreenState extends State<FolderTreeScreen> {
 
   Future<void> _applyMoves(Map<String, String> moves) async {
     await widget.settings.relocate(moves);
+    _search.relocate(moves);
     final expanded = [
       for (final path in _expanded) movedPath(path, moves) ?? path,
     ];
@@ -302,6 +330,11 @@ class _FolderTreeScreenState extends State<FolderTreeScreen> {
                   ),
                   if (!folder.isRoot) ...[
                     item(
+                      Icons.search,
+                      'Search in this folder',
+                      () => _startSearch(folder),
+                    ),
+                    item(
                       Icons.edit_outlined,
                       'Edit name',
                       () => _editName(folder),
@@ -364,6 +397,12 @@ class _FolderTreeScreenState extends State<FolderTreeScreen> {
                 icon: const Icon(Icons.folder_open_outlined),
                 onPressed: widget.onChangeRoot,
               ),
+              if (root != null)
+                IconButton(
+                  tooltip: 'Search',
+                  icon: const Icon(Icons.search),
+                  onPressed: _startSearch,
+                ),
               if (root != null)
                 IconButton(
                   tooltip: 'Root folder actions',

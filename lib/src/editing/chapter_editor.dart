@@ -12,6 +12,16 @@ class ActiveCell {
   final int offset;
 }
 
+/// A piece of text to point out in a row, such as a search match.
+class TextMark {
+  const TextMark(this.rowId, this.field, this.start, this.end);
+
+  final String rowId;
+  final Field field;
+  final int start;
+  final int end;
+}
+
 /// Where two versions of a chapter first differ.
 class ChapterChange {
   const ChapterChange(this.index, this.rowId, this.field, this.offset);
@@ -76,12 +86,17 @@ class ChapterEditor extends ChangeNotifier {
   Chapter _chapter;
   ActiveCell? _active;
   ChapterChange? _reveal;
+  TextMark? _mark;
   (String, Field)? _typingCell;
   DateTime? _lastTyping;
   String? _selectionAnchor;
 
   Chapter get chapter => _chapter;
   ActiveCell? get active => _active;
+
+  /// The text being pointed out. Any edit clears it, as its offsets could then
+  /// be wrong.
+  TextMark? get mark => _mark;
   bool get canUndo => _undo.isNotEmpty;
   bool get canRedo => _redo.isNotEmpty;
 
@@ -93,9 +108,23 @@ class ChapterEditor extends ChangeNotifier {
     return reveal;
   }
 
+  /// Points out [mark] and has the view bring it into sight, ending any editing
+  /// or selecting. If its row is gone, nothing happens.
+  void showMark(TextMark mark) {
+    final index = _chapter.indexOfId(mark.rowId);
+    if (index < 0) return;
+    _mark = mark;
+    _reveal = ChapterChange(index, mark.rowId, mark.field, mark.start);
+    _active = null;
+    _typingCell = null;
+    _selected.clear();
+    notifyListeners();
+  }
+
   void activate(String rowId, Field field, {int? offset}) {
     final index = _chapter.indexOfId(rowId);
     if (index < 0) return;
+    _mark = null;
     final length = _chapter.segments[index].field(field).length;
     _active = ActiveCell(rowId, field, (offset ?? length).clamp(0, length));
     _typingCell = null;
@@ -134,6 +163,7 @@ class ChapterEditor extends ChangeNotifier {
     if (!sameGroup) _remember();
     _typingCell = (rowId, field);
     _lastTyping = now;
+    _mark = null;
     _chapter = _chapter.updateSegment(index, segment.withField(field, text));
     _redo.clear();
     notifyListeners();
@@ -310,6 +340,7 @@ class ChapterEditor extends ChangeNotifier {
   void removeSelectedAfterMove() {
     if (_selected.isEmpty) return;
     _chapter = chapterWithoutSelected;
+    _mark = null;
     _selected.clear();
     _active = null;
     _typingCell = null;
@@ -333,6 +364,7 @@ class ChapterEditor extends ChangeNotifier {
   void _restore(Chapter version) {
     final change = firstChange(_chapter, version);
     _chapter = version;
+    _mark = null;
     _reveal = change;
     _typingCell = null;
     _selected.retainWhere((id) => version.indexOfId(id) >= 0);
@@ -354,6 +386,7 @@ class ChapterEditor extends ChangeNotifier {
   void _apply(Chapter next) {
     _remember();
     _typingCell = null;
+    _mark = null;
     _chapter = next;
     _redo.clear();
     notifyListeners();

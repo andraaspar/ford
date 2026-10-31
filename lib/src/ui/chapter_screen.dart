@@ -7,24 +7,36 @@ import '../folders/folder_tree.dart';
 import '../editing/chapter_autosaver.dart';
 import '../editing/chapter_editor.dart';
 import '../model/chapter_format.dart';
+import '../search/text_search.dart';
 import '../settings/app_settings.dart';
 import 'chapter_view.dart';
 import 'move_rows.dart';
 import 'row_menu.dart';
+import 'search_screen.dart';
 
 /// Loads one chapter file for editing, saving the text and the reading position
 /// as they change.
+///
+/// Pops with a [SearchHit] when a search result in another chapter was tapped,
+/// for that chapter to open next. There's never more than one of these screens,
+/// because two editors on one file would overwrite each other.
 class ChapterScreen extends StatefulWidget {
   const ChapterScreen({
     super.key,
     required this.entry,
     required this.rootPath,
     required this.settings,
+    required this.search,
+    this.match,
   });
 
   final ChapterEntry entry;
   final String rootPath;
   final AppSettings settings;
+  final SearchSession search;
+
+  /// A search result to go to, instead of the place the user left off.
+  final SearchHit? match;
 
   @override
   State<ChapterScreen> createState() => _ChapterScreenState();
@@ -41,6 +53,8 @@ class _ChapterScreenState extends State<ChapterScreen>
         final editor = ChapterEditor(parsed.chapter);
         _editor = editor;
         _saver = ChapterAutosaver(editor, widget.entry.file);
+        final match = widget.match;
+        if (match != null) _showMatch(editor, match);
         return parsed;
       });
 
@@ -156,13 +170,15 @@ class _ChapterScreenState extends State<ChapterScreen>
       editor.deactivate();
       return;
     }
-    await saver.flush();
-    if (!mounted) return;
     final navigator = Navigator.of(context);
-    if (saver.isUpToDate) {
-      navigator.pop();
-      return;
-    }
+    if (await _mayLeave(saver)) navigator.pop();
+  }
+
+  /// Saves, and only allows leaving unsaved edits behind if the user says so.
+  Future<bool> _mayLeave(ChapterAutosaver saver) async {
+    await saver.flush();
+    if (saver.isUpToDate) return true;
+    if (!mounted) return false;
     final leave = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -185,7 +201,35 @@ class _ChapterScreenState extends State<ChapterScreen>
         ],
       ),
     );
-    if (leave ?? false) navigator.pop();
+    return leave ?? false;
+  }
+
+  Future<void> _search(ChapterEditor editor, ChapterAutosaver saver) async {
+    final navigator = Navigator.of(context);
+    final hit = await navigator.push<SearchHit>(
+      MaterialPageRoute(
+        builder: (_) => SearchScreen(
+          rootPath: widget.rootPath,
+          session: widget.search,
+          chapterPath: _path,
+          openChapter: editor.chapter,
+        ),
+      ),
+    );
+    if (hit == null || !mounted) return;
+    if (hit.chapter.path == _path) {
+      _showMatch(editor, hit);
+    } else if (await _mayLeave(saver)) {
+      navigator.pop(hit);
+    }
+  }
+
+  void _showMatch(ChapterEditor editor, SearchHit hit) {
+    final rows = editor.chapter.segments;
+    final known = editor.chapter.indexOfId(hit.rowId) >= 0;
+    if (!known && hit.rowIndex >= rows.length) return;
+    final rowId = known ? hit.rowId : rows[hit.rowIndex].id;
+    editor.showMark(TextMark(rowId, hit.field, hit.start, hit.end));
   }
 
   @override
@@ -278,6 +322,12 @@ class _ChapterScreenState extends State<ChapterScreen>
                           tooltip: 'Repairs made while reading this file',
                           icon: const Icon(Icons.warning_amber),
                           onPressed: () => _showWarnings(warnings),
+                        ),
+                      if (active == null)
+                        IconButton(
+                          tooltip: 'Search',
+                          icon: const Icon(Icons.search),
+                          onPressed: () => unawaited(_search(editor, saver)),
                         ),
                       IconButton(
                         tooltip: 'Undo',
