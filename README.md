@@ -1,4 +1,4 @@
-# ford
+# Ford
 
 Ford is an editor for translating long texts, such as books, one paragraph at a time. Each paragraph of the original sits side by side with its translation, so you can read and edit the two together. It's made mainly for Android phones, and also runs on the Linux desktop.
 
