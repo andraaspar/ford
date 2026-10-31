@@ -103,14 +103,14 @@ Input: one `.md` file per chapter (`1.md` … `22.md`), each a simple 3-column t
 Sample dry run on *Az új nap könyve*: 22 chapters, 6,056 rows, 1,769 blank, 1,782 untranslated, 16 warnings (15 quote repairs in chapters 1, 3, 10 and 11, plus one `<br>`). **Check by hand:** 11.md line 144. It's unclear whether a paragraph break was intended before "I got out of bed".
 
 ## Milestones
-0. ✅ **Toolchain:** Flutter SDK, JDK, Linux build tools, project created. ⏳ Android `platform-tools` (`adb`) install still to finish.
+0. ✅ **Toolchain:** Flutter SDK, JDK, Linux build tools, Android `platform-tools` (`adb`), project created.
 1. ✅ **Model + file format:** parser, serializer, row operations, unit tests.
 2. ✅ **Importer** with tests based on the real sample, plus the CLI tool.
-3. **Read-only viewer:** pick the book folder, list chapters, side-by-side list with break rows, remember the scroll position.
+3. ✅ **Read-only viewer:** pick the book folder, list chapters, side-by-side list with break rows, remember the scroll position, reopen the last chapter on launch.
 4. **Editing:** edit cells in place, autosave, split / join / insert / delete, remarks, undo.
 5. **Search.**
 6. **Sync robustness:** detect external changes, reload, show a conflict prompt and banner.
-7. **Polish & packaging:** settings, theme, signed APK to install on the phone, desktop build, import from inside the app.
+7. **Polish & packaging:** settings, theme, signed APK to install on the phone, desktop build, import from inside the app. The folder picker should also point out un-imported Markdown files instead of only showing "0 chapter files".
 
 ## Decisions
 - Existing data: one Markdown file per chapter, 3-column table; rows are sentences, blank rows are breaks.
@@ -119,5 +119,7 @@ Sample dry run on *Az új nap könyve*: 22 chapters, 6,056 rows, 1,769 blank, 1,
 - Split keeps the new row in the same paragraph; breaks are separate blank rows.
 - Search has a match-case toggle.
 - Join merges both sides, after confirmation.
+- On launch the app reopens the last chapter at the saved row; Back goes to the chapter list.
+- `compileSdk` is 37 because `permission_handler` requires it; `targetSdk` still follows Flutter's default.
 - Extras (status, progress, export, glossary) are left out of v1.
 - This file (`ford/plan.md`) is the main copy of the plan.
