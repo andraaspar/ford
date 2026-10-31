@@ -42,6 +42,9 @@ class _ReorderScreenState extends State<ReorderScreen> {
       ),
       body: ReorderableListView.builder(
         buildDefaultDragHandles: false,
+        // Unlike other lists, this one doesn't keep clear of the system navigation
+        // bar by itself.
+        padding: EdgeInsets.only(bottom: MediaQuery.paddingOf(context).bottom),
         itemCount: _order.length,
         onReorderItem: (oldIndex, newIndex) => setState(() {
           _order.insert(newIndex, _order.removeAt(oldIndex));

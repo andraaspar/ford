@@ -111,14 +111,29 @@ void main() {
       expect(editor.chapter.length, 3);
     });
 
-    test('deleting the active row closes it; the title row stays', () {
+    test('deleting the active row closes it', () {
       editor.activate('a', Field.source);
       editor.delete('a');
       expect(editor.active, isNull);
       expect(editor.chapter.indexOfId('a'), -1);
+    });
 
+    test('deleting the title row makes the next row the title', () {
       editor.delete('t');
-      expect(editor.chapter.indexOfId('t'), 0);
+      expect(editor.chapter.title, 'One two');
+
+      editor.undo();
+      expect(editor.chapter.title, 'Title');
+    });
+
+    test('deleting every row leaves an empty chapter, and undo returns', () {
+      editor.delete('t');
+      editor.delete('a');
+      editor.delete('b');
+      expect(editor.chapter.isEmpty, isTrue);
+
+      editor.undo();
+      expect(editor.chapter.segments.single.id, 'b');
     });
 
     test('merging joins into the row above, caret where the texts meet', () {

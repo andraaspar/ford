@@ -66,7 +66,12 @@ class _RowMenu extends StatelessWidget {
             item(
               Icons.delete_outline,
               'Delete row',
-              editor.canDelete(rowId) ? () => editor.delete(rowId) : null,
+              () => editor.delete(rowId),
+            ),
+            item(
+              Icons.checklist,
+              'Select rows',
+              () => editor.startSelecting(rowId),
             ),
           ],
         ),

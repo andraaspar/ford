@@ -53,7 +53,8 @@ int _commonPrefix(String a, String b) {
   return i;
 }
 
-/// The chapter being edited, with its undo history and the active cell.
+/// The chapter being edited, with its undo history, the active cell and the
+/// selected rows.
 ///
 /// Knows nothing about files or widgets. Every change to [chapter] notifies
 /// listeners while the view still shows the old rows, so the view can keep its
@@ -70,12 +71,14 @@ class ChapterEditor extends ChangeNotifier {
   final DateTime Function() _clock;
   final _undo = <Chapter>[];
   final _redo = <Chapter>[];
+  final _selected = <String>{};
 
   Chapter _chapter;
   ActiveCell? _active;
   ChapterChange? _reveal;
   (String, Field)? _typingCell;
   DateTime? _lastTyping;
+  String? _selectionAnchor;
 
   Chapter get chapter => _chapter;
   ActiveCell? get active => _active;
@@ -96,6 +99,7 @@ class ChapterEditor extends ChangeNotifier {
     final length = _chapter.segments[index].field(field).length;
     _active = ActiveCell(rowId, field, (offset ?? length).clamp(0, length));
     _typingCell = null;
+    _selected.clear();
     notifyListeners();
   }
 
@@ -185,14 +189,133 @@ class ChapterEditor extends ChangeNotifier {
   /// Inserts a blank row (a break) at [index].
   void insertBlank(int index) => _apply(_chapter.insertEmpty(index));
 
-  /// The title row can't be deleted: the next row would silently take over as
-  /// the chapter's title.
-  bool canDelete(String rowId) => _chapter.indexOfId(rowId) > 0;
-
+  /// Deleting the title row makes the next row the title. Undo brings it back.
   void delete(String rowId) {
-    if (!canDelete(rowId)) return;
+    final index = _chapter.indexOfId(rowId);
+    if (index < 0) return;
     if (_active?.rowId == rowId) _active = null;
-    _apply(_chapter.delete(_chapter.indexOfId(rowId)));
+    _apply(_chapter.delete(index));
+  }
+
+  /// Whether rows are being selected, which replaces editing while it lasts.
+  bool get isSelecting => _selected.isNotEmpty;
+
+  int get selectedCount => _selected.length;
+
+  bool isSelected(String rowId) => _selected.contains(rowId);
+
+  /// The selected rows, in chapter order.
+  List<Segment> get selectedRows =>
+      _chapter.segments.where((s) => _selected.contains(s.id)).toList();
+
+  /// The chapter as it would be without the selected rows.
+  Chapter get chapterWithoutSelected => _chapter.deleteIds(_selected);
+
+  /// Starts selecting, with [rowId] as the first selected row.
+  void startSelecting(String rowId) {
+    if (_chapter.indexOfId(rowId) < 0) return;
+    _active = null;
+    _typingCell = null;
+    _selected
+      ..clear()
+      ..add(rowId);
+    _selectionAnchor = rowId;
+    notifyListeners();
+  }
+
+  /// Deselecting the last row ends selecting.
+  void toggleSelected(String rowId) {
+    if (_chapter.indexOfId(rowId) < 0) return;
+    if (!_selected.remove(rowId)) _selected.add(rowId);
+    _selectionAnchor = rowId;
+    notifyListeners();
+  }
+
+  /// Adds all the rows from the last one tapped to [rowId].
+  void selectRangeTo(String rowId) {
+    final end = _chapter.indexOfId(rowId);
+    if (end < 0) return;
+    final anchor = _selectionAnchor;
+    final found = anchor == null ? -1 : _chapter.indexOfId(anchor);
+    final start = found < 0 ? end : found;
+    final first = start < end ? start : end;
+    final last = start < end ? end : start;
+    for (var i = first; i <= last; i++) {
+      _selected.add(_chapter.segments[i].id);
+    }
+    _selectionAnchor = rowId;
+    notifyListeners();
+  }
+
+  void clearSelection() {
+    if (_selected.isEmpty) return;
+    _selected.clear();
+    notifyListeners();
+  }
+
+  /// Whether any selected row has an unselected row above it.
+  bool get canMoveSelectedUp {
+    for (var i = 1; i < _chapter.length; i++) {
+      if (_selected.contains(_chapter.segments[i].id) &&
+          !_selected.contains(_chapter.segments[i - 1].id)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// Whether any selected row has an unselected row below it.
+  bool get canMoveSelectedDown {
+    for (var i = 0; i < _chapter.length - 1; i++) {
+      if (_selected.contains(_chapter.segments[i].id) &&
+          !_selected.contains(_chapter.segments[i + 1].id)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  void moveSelectedUp() {
+    if (!canMoveSelectedUp) return;
+    _reorder(_chapter.moveRowsUp(_selected), revealLast: false);
+  }
+
+  void moveSelectedDown() {
+    if (!canMoveSelectedDown) return;
+    _reorder(_chapter.moveRowsDown(_selected), revealLast: true);
+  }
+
+  /// Puts the selected rows together after the row with [afterRowId], or at the
+  /// very start if that's null.
+  void moveSelectedAfter(String? afterRowId) {
+    if (_selected.isEmpty || _selected.length == _chapter.length) return;
+    _reorder(_chapter.moveRowsAfter(_selected, afterRowId), revealLast: false);
+  }
+
+  /// Applies a new order and keeps the moved rows in sight, so that they can be
+  /// moved on. Doesn't add an undo step if nothing changed.
+  void _reorder(Chapter next, {required bool revealLast}) {
+    if (firstChange(_chapter, next) == null) return;
+    final moved = next.segments.where((s) => _selected.contains(s.id));
+    final row = revealLast ? moved.last : moved.first;
+    _reveal = ChapterChange(next.segments.indexOf(row), row.id, null, 0);
+    _apply(next);
+  }
+
+  /// Removes the selected rows, which now live in another chapter's file. If
+  /// the title row is one of them, the first row left becomes the title.
+  ///
+  /// Any earlier version in the undo history still has these rows, so going back
+  /// to one would duplicate them. That's why the history ends here.
+  void removeSelectedAfterMove() {
+    if (_selected.isEmpty) return;
+    _chapter = chapterWithoutSelected;
+    _selected.clear();
+    _active = null;
+    _typingCell = null;
+    _undo.clear();
+    _redo.clear();
+    notifyListeners();
   }
 
   void undo() {
@@ -212,6 +335,7 @@ class ChapterEditor extends ChangeNotifier {
     _chapter = version;
     _reveal = change;
     _typingCell = null;
+    _selected.retainWhere((id) => version.indexOfId(id) >= 0);
 
     // An active cell follows the restored text, so the caret ends up where the
     // change is; otherwise editing stays closed.

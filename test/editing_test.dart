@@ -34,6 +34,102 @@ ChapterEditor _editor(Chapter chapter, WidgetTester tester) {
 }
 
 void main() {
+  group('selecting rows', () {
+    testWidgets('gestures act on whole rows instead of opening anything', (
+      tester,
+    ) async {
+      final editor = _editor(_longChapter(), tester);
+      await tester.pumpWidget(_app(editor));
+      List<String> selected() => editor.selectedRows.map((s) => s.id).toList();
+      final height = tester.getSize(find.byType(RowTile).at(2)).height;
+
+      editor.startSelecting('row2');
+      await tester.pump();
+      expect(tester.getSize(find.byType(RowTile).at(2)).height, height);
+
+      await tester.tap(find.text('target 4'), warnIfMissed: false);
+      await tester.pump();
+      expect(selected(), ['row2', 'row4']);
+      expect(editor.active, isNull);
+
+      await tester.tap(find.text('source 4'), warnIfMissed: false);
+      await tester.pump();
+      expect(selected(), ['row2']);
+
+      // A long press selects from the last row tapped, which was row 4.
+      await tester.longPress(find.text('source 6'), warnIfMissed: false);
+      await tester.pump();
+      expect(selected(), ['row2', 'row4', 'row5', 'row6']);
+      expect(find.text('Delete row'), findsNothing);
+
+      editor.clearSelection();
+      await tester.pump();
+      await tester.tap(find.text('target 3'));
+      await tester.pump();
+      expect(editor.active?.rowId, 'row3');
+    });
+
+    testWidgets('a chapter that lost every row can start again', (
+      tester,
+    ) async {
+      final editor = _editor(_longChapter(), tester);
+      await tester.pumpWidget(_app(editor, startAt: 'row50'));
+
+      editor.startSelecting('row0');
+      editor.selectRangeTo('row199');
+      editor.removeSelectedAfterMove();
+      await tester.pump();
+      expect(find.text('This chapter is empty.'), findsOneWidget);
+
+      await tester.tap(find.text('Add a row'));
+      await tester.pump();
+      await tester.pump();
+
+      expect(editor.chapter.length, 1);
+      expect(find.byType(RowTile), findsOneWidget);
+      expect(editor.active?.rowId, editor.chapter.segments.single.id);
+    });
+
+    testWidgets('rows moved up and down stay in sight', (tester) async {
+      final editor = _editor(_longChapter(), tester);
+      await tester.pumpWidget(_app(editor));
+      editor.startSelecting('row2');
+      await tester.pump();
+
+      for (var i = 0; i < 60; i++) {
+        editor.moveSelectedDown();
+        await tester.pump();
+        await tester.pump();
+      }
+      expect(editor.chapter.indexOfId('row2'), 62);
+      expect(find.text('source 2'), findsOneWidget);
+
+      for (var i = 0; i < 60; i++) {
+        editor.moveSelectedUp();
+        await tester.pump();
+        await tester.pump();
+      }
+      expect(editor.chapter.indexOfId('row2'), 2);
+      expect(find.text('source 2'), findsOneWidget);
+    });
+
+    testWidgets('moved rows leave the view without it jumping', (tester) async {
+      final editor = _editor(_longChapter(), tester);
+      await tester.pumpWidget(_app(editor, startAt: 'row50'));
+      final top = tester.getTopLeft(find.text('source 50'));
+
+      editor.startSelecting('row10');
+      editor.toggleSelected('row52');
+      await tester.pump();
+      editor.removeSelectedAfterMove();
+      await tester.pump();
+      await tester.pump();
+
+      expect(tester.getTopLeft(find.text('source 50')), top);
+      expect(find.text('source 52'), findsNothing);
+    });
+  });
+
   group('editing a cell', () {
     testWidgets('tapping opens a field without changing the row height', (
       tester,
@@ -521,17 +617,39 @@ void main() {
       expect(find.text('source 1'), findsNothing);
     });
 
-    testWidgets('the title row can\'t be deleted or have a row above it', (
+    testWidgets('the title row can be deleted but can\'t have a row above it', (
       tester,
     ) async {
       await open(tester, 'source 0');
 
-      for (final label in ['Delete row', 'Insert blank row above']) {
-        final tile = tester.widget<ListTile>(
-          find.ancestor(of: find.text(label), matching: find.byType(ListTile)),
-        );
-        expect(tile.enabled, isFalse);
-      }
+      bool enabled(String label) => tester
+          .widget<ListTile>(
+            find.ancestor(
+              of: find.text(label),
+              matching: find.byType(ListTile),
+            ),
+          )
+          .enabled;
+      expect(enabled('Delete row'), isTrue);
+      expect(enabled('Insert blank row above'), isFalse);
+    });
+
+    testWidgets('deleting the only row shows the empty chapter; undo returns', (
+      tester,
+    ) async {
+      final editor = _editor(
+        Chapter([Segment(id: 'a', source: 'Only')]),
+        tester,
+      );
+      await tester.pumpWidget(_app(editor));
+
+      editor.delete('a');
+      await tester.pump();
+      expect(find.text('This chapter is empty.'), findsOneWidget);
+
+      editor.undo();
+      await tester.pump();
+      expect(find.text('Only'), findsOneWidget);
     });
 
     testWidgets('an empty chapter offers a first row', (tester) async {
@@ -583,6 +701,7 @@ void main() {
               MaterialPageRoute<void>(
                 builder: (_) => ChapterScreen(
                   entry: ChapterEntry(file: file, title: null),
+                  rootPath: file.parent.path,
                   settings: settings,
                 ),
               ),

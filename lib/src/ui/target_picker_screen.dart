@@ -1,8 +1,13 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../folders/folder_ops.dart';
 import '../folders/folder_tree.dart';
 import '../folders/target_selection.dart';
+import '../model/chapter.dart';
+import '../model/chapter_format.dart';
+import '../model/segment.dart';
 import 'folder_dialogs.dart';
 import 'tree_row.dart';
 
@@ -207,6 +212,243 @@ class _DestinationPickerScreenState extends State<DestinationPickerScreen> {
           ),
         );
       },
+    );
+  }
+}
+
+/// Picks one chapter other than the one at [currentPath], whose neighbours show
+/// to begin with. Pops with the chosen [ChapterEntry].
+class ChapterPickerScreen extends StatefulWidget {
+  const ChapterPickerScreen({
+    super.key,
+    required this.rootPath,
+    required this.currentPath,
+    required this.title,
+  });
+
+  final String rootPath;
+  final String currentPath;
+  final String title;
+
+  @override
+  State<ChapterPickerScreen> createState() => _ChapterPickerScreenState();
+}
+
+class _ChapterPickerScreenState extends State<ChapterPickerScreen> {
+  final _expanded = <String>{};
+  late final Future<FolderEntry> _tree = FolderTree.load(widget.rootPath)
+      .then((root) {
+        final current = root.find(widget.currentPath);
+        if (current != null) expandAround(current, _expanded);
+        return root;
+      });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(widget.title)),
+      body: _TreeLoader(
+        tree: _tree,
+        builder: (root) {
+          final rows = visibleRows(root, _expanded);
+          return ListView.builder(
+            itemCount: rows.length,
+            itemBuilder: (context, index) {
+              final (:entry, :depth) = rows[index];
+              void toggleExpanded() => setState(() {
+                if (!_expanded.remove(entry.path)) _expanded.add(entry.path);
+              });
+              return TreeRow(
+                entry: entry,
+                depth: depth,
+                isExpanded: _expanded.contains(entry.path),
+                onToggleExpanded: toggleExpanded,
+                enabled: switch (entry) {
+                  ChapterEntry() =>
+                    entry.error == null && entry.path != widget.currentPath,
+                  FolderEntry() => true,
+                },
+                onTap: switch (entry) {
+                  ChapterEntry() => () => Navigator.of(context).pop(entry),
+                  FolderEntry() => toggleExpanded,
+                },
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// Where in a chapter new rows go.
+class RowPlacement {
+  const RowPlacement(this.afterRowId, this.description);
+
+  /// The row they go after. Null means the very start, before the title.
+  final String? afterRowId;
+
+  /// Says where that is, to finish a sentence.
+  final String description;
+}
+
+/// Picks where in a chapter rows go. Pops with a [RowPlacement].
+class RowPlacementScreen extends StatefulWidget {
+  /// For rows coming from another chapter, into the chapter in [file].
+  RowPlacementScreen.intoFile({
+    super.key,
+    required File file,
+    required this.title,
+  }) : chapter = file.readAsString().then(
+         (text) => ChapterFormat.parse(text).chapter,
+       ),
+       moving = const {};
+
+  /// For the rows with the IDs in [moving], within [chapter].
+  RowPlacementScreen.within({
+    super.key,
+    required Chapter chapter,
+    required this.moving,
+    required this.title,
+  }) : chapter = Future.value(chapter);
+
+  final Future<Chapter> chapter;
+  final String title;
+
+  /// The rows being moved within this chapter; they aren't offered as places.
+  final Set<String> moving;
+
+  @override
+  State<RowPlacementScreen> createState() => _RowPlacementScreenState();
+}
+
+class _RowPlacementScreenState extends State<RowPlacementScreen> {
+  static const _previewLength = 60;
+
+  // The route may build its screen again; the first read stays.
+  late final Future<Chapter> _chapter = widget.chapter;
+
+  static String _describe(Segment row) {
+    final text = row.source.isNotEmpty ? row.source : row.target;
+    if (text.isEmpty) return 'after a blank row';
+    return text.length <= _previewLength
+        ? 'after "$text"'
+        : 'after "${text.substring(0, _previewLength)}…"';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final navigator = Navigator.of(context);
+    return FutureBuilder(
+      future: _chapter,
+      builder: (context, snapshot) {
+        final chapter = snapshot.data;
+        final rows = chapter?.segments
+            .where((s) => !widget.moving.contains(s.id))
+            .toList();
+        final Widget body;
+        if (chapter != null && rows != null) {
+          body = Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text('Tap the row they should go after.'),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: ListView.separated(
+                  itemCount: rows.length,
+                  separatorBuilder: (_, _) => const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final row = rows[index];
+                    return _PlacementRow(
+                      row: row,
+                      isTitle: row == chapter.segments.first,
+                      onTap: () =>
+                          navigator.pop(RowPlacement(row.id, _describe(row))),
+                    );
+                  },
+                ),
+              ),
+            ],
+          );
+        } else if (snapshot.hasError) {
+          body = Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Text('Can\'t read this chapter: ${snapshot.error}'),
+            ),
+          );
+        } else {
+          body = const Center(child: CircularProgressIndicator());
+        }
+        return Scaffold(
+          appBar: AppBar(title: Text(widget.title)),
+          body: body,
+          bottomNavigationBar: chapter == null || rows == null
+              ? null
+              : _BottomBar(
+                  children: [
+                    if (rows.isNotEmpty)
+                      OutlinedButton(
+                        onPressed: () => navigator.pop(
+                          const RowPlacement(
+                            null,
+                            'at the start, before the title',
+                          ),
+                        ),
+                        child: const Text('At the start'),
+                      ),
+                    const Spacer(),
+                    FilledButton(
+                      onPressed: () => navigator.pop(
+                        RowPlacement(rows.lastOrNull?.id, 'at the end'),
+                      ),
+                      child: const Text('At the end'),
+                    ),
+                  ],
+                ),
+        );
+      },
+    );
+  }
+}
+
+class _PlacementRow extends StatelessWidget {
+  const _PlacementRow({
+    required this.row,
+    required this.isTitle,
+    required this.onTap,
+  });
+
+  final Segment row;
+  final bool isTitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final style = isTitle
+        ? theme.textTheme.titleMedium
+        : theme.textTheme.bodyMedium;
+    Widget side(String text) => Expanded(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: Text(
+          text,
+          style: style,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
+    );
+    return InkWell(
+      onTap: onTap,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [side(row.source), side(row.target)],
+      ),
     );
   }
 }

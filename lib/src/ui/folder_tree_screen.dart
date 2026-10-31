@@ -83,7 +83,11 @@ class _FolderTreeScreenState extends State<FolderTreeScreen> {
     if (!mounted) return;
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => ChapterScreen(entry: entry, settings: widget.settings),
+        builder: (_) => ChapterScreen(
+          entry: entry,
+          rootPath: widget.rootPath,
+          settings: widget.settings,
+        ),
       ),
     );
     if (!mounted) return;

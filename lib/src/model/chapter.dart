@@ -12,6 +12,7 @@ class Chapter {
 
   int get length => segments.length;
   bool get isEmpty => segments.isEmpty;
+  bool get isNotEmpty => segments.isNotEmpty;
 
   Set<String> get ids => {for (final s in segments) s.id};
 
@@ -40,6 +41,70 @@ class Chapter {
       _replace(index, index, [Segment(id: newId(ids))]);
 
   Chapter delete(int index) => _replace(index, index + 1, const []);
+
+  /// Removes the segments with the given [ids].
+  Chapter deleteIds(Set<String> ids) =>
+      Chapter(segments.where((s) => !ids.contains(s.id)).toList());
+
+  /// Moves each block of segments with the given [ids] up by one, past the
+  /// segment above it. A block already at the top stays there.
+  Chapter moveRowsUp(Set<String> ids) {
+    final list = [...segments];
+    for (var i = 1; i < list.length; i++) {
+      if (ids.contains(list[i].id) && !ids.contains(list[i - 1].id)) {
+        final above = list[i - 1];
+        list[i - 1] = list[i];
+        list[i] = above;
+      }
+    }
+    return Chapter(list);
+  }
+
+  /// Moves each block of segments with the given [ids] down by one, past the
+  /// segment below it. A block already at the bottom stays there.
+  Chapter moveRowsDown(Set<String> ids) {
+    final list = [...segments];
+    for (var i = list.length - 2; i >= 0; i--) {
+      if (ids.contains(list[i].id) && !ids.contains(list[i + 1].id)) {
+        final below = list[i + 1];
+        list[i + 1] = list[i];
+        list[i] = below;
+      }
+    }
+    return Chapter(list);
+  }
+
+  /// Puts the segments with the given [ids] together, keeping their order, after
+  /// the segment with [afterId], which isn't one of them. If that's null, they
+  /// go at the very start, so that the first of them becomes the title.
+  Chapter moveRowsAfter(Set<String> ids, String? afterId) {
+    final moved = segments.where((s) => ids.contains(s.id));
+    final rest = segments.where((s) => !ids.contains(s.id)).toList();
+    final index = afterId == null
+        ? 0
+        : rest.indexWhere((s) => s.id == afterId) + 1;
+    return Chapter(rest..insertAll(index, moved));
+  }
+
+  /// Inserts [rows] from another chapter at [index] (0..length). They keep their
+  /// IDs, except one already used here, which gets a new ID.
+  Chapter insertRows(int index, Iterable<Segment> rows) {
+    final taken = ids;
+    final placed = <Segment>[];
+    for (final row in rows) {
+      final id = taken.contains(row.id) ? newId(taken) : row.id;
+      taken.add(id);
+      placed.add(
+        Segment(
+          id: id,
+          source: row.source,
+          target: row.target,
+          remark: row.remark,
+        ),
+      );
+    }
+    return _replace(index, index, placed);
+  }
 
   /// Splits the text on [side] of segment [index] at [offset].
   ///
@@ -76,4 +141,3 @@ class Chapter {
     return _replace(index, index + 2, [merged]);
   }
 }
-

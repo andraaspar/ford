@@ -152,6 +152,33 @@ class FolderOps {
     return moves;
   }
 
+  /// Adds [rows] to the chapter in [file] as it is on disk now: after the row
+  /// with [afterRowId], at the very start if that's null, or at the end if that
+  /// row has gone. A chapter with no rows first gets a blank title row, so that none of [rows]
+  /// silently becomes its title, unless [firstIsTitle] says the first one was a
+  /// title already.
+  static Future<void> insertRows(
+    File file,
+    List<Segment> rows, {
+    String? afterRowId,
+    bool firstIsTitle = false,
+  }) async {
+    final parsed = ChapterFormat.parse(await file.readAsString()).chapter;
+    final chapter = parsed.isEmpty && !firstIsTitle
+        ? parsed.insertEmpty(0)
+        : parsed;
+    final after = afterRowId == null ? -1 : chapter.indexOfId(afterRowId);
+    final index = afterRowId == null && parsed.isNotEmpty
+        ? 0
+        : after < 0
+        ? chapter.length
+        : after + 1;
+    await writeAtomically(
+      file,
+      ChapterFormat.serialize(chapter.insertRows(index, rows)),
+    );
+  }
+
   static Future<void> delete(TreeEntry entry) async {
     switch (entry) {
       case ChapterEntry():
@@ -218,6 +245,16 @@ class FolderOps {
     final parent = entry.parent;
     if (parent == null || parent.firstChapter != entry) return const [];
     return [?_nameChange(parent, parent.chapters.skip(1).firstOrNull?.title)];
+  }
+
+  /// What giving [chapter] the title row [title] does to its folder's name.
+  static List<NameChange> nameChangesForTitle(
+    ChapterEntry chapter,
+    String? title,
+  ) {
+    final parent = chapter.parent;
+    if (parent == null || parent.firstChapter != chapter) return const [];
+    return [?_nameChange(parent, title)];
   }
 
   static List<NameChange> _nameChangesForAdded(

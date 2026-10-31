@@ -260,35 +260,56 @@ class RowTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final active = editor.active?.rowId == segment.id ? editor.active : null;
+    final selecting = editor.isSelecting;
+    final colors = Theme.of(context).colorScheme;
     return GestureDetector(
-      onLongPress: () => showRowMenu(context, editor, segment.id),
-      onSecondaryTap: () => showRowMenu(context, editor, segment.id),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _sides(context, active),
-          if (active?.field == Field.remark)
-            _RemarkEditor(
-              key: ValueKey('${segment.id}/remark'),
-              editor: editor,
-              rowId: segment.id,
-              text: segment.remark,
-            )
-          else if (segment.hasRemark)
-            _Remark(
-              text: segment.remark,
-              // A remark being read while its row is edited stays open.
-              collapsed: remarkCollapsed && active == null,
-              onTap: onToggleRemark,
-            ),
-          Divider(
-            height: 1,
-            thickness: 1,
-            color: Theme.of(context).colorScheme.outlineVariant,
+      behavior: selecting ? HitTestBehavior.opaque : null,
+      onTap: selecting ? _onTapWhileSelecting : null,
+      onLongPress: selecting
+          ? () => editor.selectRangeTo(segment.id)
+          : () => showRowMenu(context, editor, segment.id),
+      onSecondaryTap: selecting
+          ? () => editor.selectRangeTo(segment.id)
+          : () => showRowMenu(context, editor, segment.id),
+      child: IgnorePointer(
+        // While selecting, a tap anywhere on a row is about the whole row.
+        ignoring: selecting,
+        child: ColoredBox(
+          color: editor.isSelected(segment.id)
+              ? colors.primaryContainer
+              : Colors.transparent,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _sides(context, active),
+              if (active?.field == Field.remark)
+                _RemarkEditor(
+                  key: ValueKey('${segment.id}/remark'),
+                  editor: editor,
+                  rowId: segment.id,
+                  text: segment.remark,
+                )
+              else if (segment.hasRemark)
+                _Remark(
+                  text: segment.remark,
+                  // A remark being read while its row is edited stays open.
+                  collapsed: remarkCollapsed && active == null,
+                  onTap: onToggleRemark,
+                ),
+              Divider(height: 1, thickness: 1, color: colors.outlineVariant),
+            ],
           ),
-        ],
+        ),
       ),
     );
+  }
+
+  void _onTapWhileSelecting() {
+    if (HardwareKeyboard.instance.isShiftPressed) {
+      editor.selectRangeTo(segment.id);
+    } else {
+      editor.toggleSelected(segment.id);
+    }
   }
 
   Widget _sides(BuildContext context, ActiveCell? active) {

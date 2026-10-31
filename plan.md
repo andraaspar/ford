@@ -78,8 +78,10 @@ One block per row, with a blank line between blocks. Each field is a single line
 |---|---|
 | **Split** (cursor in source *or* target cell; also **Enter**) | The text before the cursor stays in the current row. A new row is inserted below with the text after the cursor on the same side and an **empty** cell on the other side. The remark stays on the original row. |
 | **Merge with previous** (**Backspace** at the start of a source or target cell) | Merges row *i* into row *i-1*, with the caret where the texts meet: source = `src_i-1 + " " + src_i`, target likewise, remarks joined on separate lines. Empty sides are joined without an extra space. **Asks for confirmation first** only if the other side of row *i* has text; otherwise it simply undoes a split. |
-| Insert blank row (break) / Delete row | From a row menu. Adding or removing a break is just inserting or deleting a blank row. |
-| Undo / redo | For text edits and row operations, kept per session. |
+| Insert blank row (break) / Delete row | From a row menu. Adding or removing a break is just inserting or deleting a blank row. Any row can be deleted, including the title row, and deleting the last one leaves an empty chapter. |
+| **Move to another chapter** | From a row menu, **Select rows** starts selecting. Tapping a row toggles it; a long press, right-click or Shift-click selects everything from the last row tapped. **Move** then asks for the chapter, the row to go after (or the start, before the title, or the end), and a confirmation. Remarks go along, and IDs too unless the other chapter already uses one. |
+| **Reorder** | While rows are selected, **Move up** and **Move down** shift them by one, and **Move within this chapter** puts them after a row you pick, at the start (before the title) or at the end. Rows that weren't next to each other stay apart with up and down, and come together with a pick. Undo reverses each step. |
+| Undo / redo | For text edits and row operations, kept per session. A move to another chapter ends the source chapter's history, because older versions still hold the moved rows. |
 
 The scroll position is anchored to the row being edited, so these operations never move the view.
 
@@ -158,7 +160,8 @@ Sample dry run on *Az új nap könyve*: 22 chapters, 6,056 rows, 1,769 blank, 1,
 - On launch the app reopens the last chapter at the saved row; Back goes to the chapter list.
 - `compileSdk` is 37 because `permission_handler` requires it; `targetSdk` still follows Flutter's default.
 - Row actions open from a long press or right-click on any row, or from ⋮ in the app bar while a cell is open. Back, Esc or ✓ closes the open cell.
-- The title row can't be deleted and nothing can be inserted above it, because another row would silently become the title.
+- Whichever row comes first is the title. Deleting or reordering can change which row that is, and doesn't warn about the title or a folder's display name, because Undo reverses it and the row visibly becomes the title. **Insert blank row above** still isn't offered on the title row.
+- The title row can be moved, because that asks first: the confirmation names the new title, and warns if a folder's display name would change. The first row left becomes the title, and moving every row leaves an empty chapter. In the destination a row placed at the start becomes the title, which the confirmation states, and elsewhere a moved title is an ordinary row. In a chapter with no rows a moved title stays the title. Other rows moved into a chapter with no rows get a blank title row above them. A move writes the destination file first, so a crash can duplicate rows but not lose them.
 - Until milestone 7, a save overwrites any change Syncthing made to the open chapter's file.
 - Saving drops `#` comment lines, because the parser doesn't keep them.
 - Extras (status, progress, export, glossary) are left out of v1. Export will use the shared target picker when it's added.
