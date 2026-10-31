@@ -6,6 +6,7 @@
 - Remarks stay visible inline, with no hidden third column.
 - Fast **exact** search (accents matter), with a match-case toggle.
 - Data lives in plain-text files in a Syncthing folder. No server.
+- Files can be organized into nested folders, and actions such as search, import and export can target any selection of those folders.
 - One-time import of the existing Obsidian Markdown tables.
 
 ## Tech stack
@@ -16,12 +17,14 @@
 | Long list with stable positions | `scrollable_positioned_list` (jump to index, read which rows are visible) |
 | File access (Android) | `MANAGE_EXTERNAL_STORAGE` ("All files access"), then plain `dart:io` |
 | File change detection | `watcher` package on desktop; folder scan on app resume / regular check on Android |
-| Local, per-device settings | `shared_preferences` (book folder path, last position per chapter, font size, theme) |
+| Local, per-device settings | `shared_preferences` (root folder path, last position per chapter, font size, theme) |
 | Tests | Unit tests for parser, serializer, importer and row operations; widget tests for the editor |
 
 ## Data model
-A **book** is a folder. A **chapter** is a file. A chapter is a list of **rows**.
+A **folder** holds chapters and other folders, all inside one root folder. A **chapter** is a file. A chapter is a list of **rows**.
 
+- **Folders nest to any depth** and can hold chapters, other folders, or both. A folder may in practice be a book, a section or a sub-section, but that role is only implied by how it is used. It isn't stored or named anywhere, in the data or in the app.
+- **A folder has one property for now: its display name.** This is the first row of the first file directly inside the folder, so it has a source and a target side and is translated like any other row. It doesn't need to match the folder's name on disk, and it isn't stored anywhere else.
 - **A row is usually one sentence:** source, target, optional remark, plus a stable ID.
 - **The first row is the chapter title pair.**
 - **Blank rows (source and target both empty) are breaks.** One blank row is a paragraph break; several (for example 3) make a larger section break. They are real rows, so adding, enlarging, shrinking and deleting breaks is ordinary row editing.
@@ -29,10 +32,14 @@ A **book** is a folder. A **chapter** is a file. A chapter is a list of **rows**
 
 ### Data layout (in the Syncthing folder)
 ```
-Translations/
-  Az új nap könyve/
-    01.txt     # chapters ordered by file name (natural sort); no shared index file
-    02.txt
+Translations/     # the root folder
+  01/             # a folder
+    00.txt        # its first row is the folder's display name
+    01.txt        # files and folders sort together by name (natural sort); no shared index file
+    02/           # a nested folder, placed between 01.txt and 03.txt
+      00.txt      # its first row is this nested folder's display name
+      01.txt
+    03.txt
     ...
 ```
 
@@ -82,12 +89,31 @@ The scroll position is anchored to the row being edited, so these operations nev
 - If there are unsaved edits **and** the file changed on disk, you get a prompt (keep mine / take theirs / save mine as a copy).
 - If `*.sync-conflict-*` files exist, the app shows a banner.
 
+### Folders
+The chapter list becomes a tree of folders and chapters, showing each folder's display name.
+
+| Action | Behaviour |
+|---|---|
+| **Create** | Asks for a display name, then creates the folder and a first file (`00.txt`) with that name as its title row. The name on disk is generated and doesn't depend on the display name. |
+| **Edit** | Changing the display name edits the title row of the first file, on the source and target sides. The folder isn't renamed on disk. |
+| **Reorganize** | Reorder chapters and folders within a folder, or move them to another folder. Order comes from names on disk, so the app renames the files and folders it needs to. Open edits are saved first, and saved per-chapter positions follow the move. |
+| **Delete** | Always asks for confirmation first, stating the folder's display name and how many chapters and nested folders will go with it. Syncthing passes the deletion on to the other devices. |
+
+- **Fallback name:** a folder with no file directly inside it, or whose first file has an empty title row, shows its name on disk, marked as unnamed.
+- **The first file decides the display name.** If moving, reordering or adding a file would make a different file first, the app warns about the display name that would result.
+- **Folders whose first file is a real chapter** (such as those imported earlier) show that chapter's title as their display name. An **Add name** action adds a new `00.txt` in front, so the chapter's title stays as it is.
+
+### Choosing targets
+Search, import and export all choose their targets the same way, from the tree of folders and chapters:
+- Ticking a folder includes everything inside it. Anything inside can then be unticked to omit it, and whatever isn't ticked is left out.
+- Import writes to one place, so it picks a single destination folder, or creates a new one.
+
 ### Search
 - Exact substring match, accents count. A **match case** toggle (off by default).
-- Scope: source / target / remarks / all; current chapter or whole book.
-- Results list with context; tapping one jumps to the row and highlights the match.
+- Scope: source / target / remarks / all; current chapter, current folder, or any selection of folders and chapters (see *Choosing targets*).
+- Results list with context and the display name of the folder each result is in; tapping one jumps to the row and highlights the match.
 
-### Import (Obsidian → book folder)
+### Import (Obsidian → folder)
 Input: one `.md` file per chapter (`1.md` … `22.md`), each a simple 3-column table:
 ```
 | chapter title | fejezetcím | |
@@ -107,16 +133,20 @@ Sample dry run on *Az új nap könyve*: 22 chapters, 6,056 rows, 1,769 blank, 1,
 0. ✅ **Toolchain:** Flutter SDK, JDK, Linux build tools, Android `platform-tools` (`adb`), project created.
 1. ✅ **Model + file format:** parser, serializer, row operations, unit tests.
 2. ✅ **Importer** with tests based on the real sample, plus the CLI tool.
-3. ✅ **Read-only viewer:** pick the book folder, list chapters, side-by-side list with break rows, remember the scroll position, reopen the last chapter on launch.
+3. ✅ **Read-only viewer:** pick the folder, list chapters, side-by-side list with break rows, remember the scroll position, reopen the last chapter on launch.
 4. ✅ **Editing:** edit cells in place, autosave, split / join / insert / delete, remarks, undo. Being tested by hand on the phone.
-5. **Search.**
-6. **Sync robustness:** detect external changes, reload, show a conflict prompt and banner.
-7. **Polish & packaging:** settings, theme, signed APK to install on the phone, desktop build, import from inside the app. The folder picker should also point out un-imported Markdown files instead of only showing "0 chapter files".
+5. **Folders:** nested folder tree with display names read from the first file; create, edit, reorganize and delete; the shared target picker. Replace "book" with "folder" in the code and UI.
+6. **Search,** using the target picker.
+7. **Sync robustness:** detect external changes, reload, show a conflict prompt and banner.
+8. **Polish & packaging:** settings, theme, signed APK to install on the phone, desktop build, import from inside the app. The folder picker should also point out un-imported Markdown files instead of only showing "0 chapter files".
 
 ## Decisions
 - Existing data: one Markdown file per chapter, 3-column table; rows are sentences, blank rows are breaks.
 - No line breaks inside a source/target cell.
-- One file per chapter; chapter order comes from file names (no `book.yaml`).
+- One file per chapter; order comes from file and folder names (no index or metadata file).
+- Folders are called folders, never books or sections. Their roles are implied, not stored, for now.
+- A folder's display name comes from the first row of its first file, so a folder normally starts with a dedicated name file (`00.txt`). That file is otherwise an ordinary chapter and can hold more rows, such as a title page.
+- The root folder has no display name. Chapters directly inside it still work.
 - Split keeps the new row in the same paragraph; breaks are separate blank rows.
 - Search has a match-case toggle.
 - Merging moves both sides. It asks first only if the other side of the row has text.
@@ -125,7 +155,7 @@ Sample dry run on *Az új nap könyve*: 22 chapters, 6,056 rows, 1,769 blank, 1,
 - `compileSdk` is 37 because `permission_handler` requires it; `targetSdk` still follows Flutter's default.
 - Row actions open from a long press or right-click on any row, or from ⋮ in the app bar while a cell is open. Back, Esc or ✓ closes the open cell.
 - The title row can't be deleted and nothing can be inserted above it, because another row would silently become the title.
-- Until milestone 6, a save overwrites any change Syncthing made to the open chapter's file.
+- Until milestone 7, a save overwrites any change Syncthing made to the open chapter's file.
 - Saving drops `#` comment lines, because the parser doesn't keep them.
-- Extras (status, progress, export, glossary) are left out of v1.
+- Extras (status, progress, export, glossary) are left out of v1. Export will use the shared target picker when it's added.
 - This file (`ford/plan.md`) is the main copy of the plan.
