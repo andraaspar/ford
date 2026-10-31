@@ -12,7 +12,7 @@
 | Concern | Choice |
 |---|---|
 | Framework | Flutter (stable, 3.47), targets Android + Linux/Windows desktop |
-| State management | Riverpod (or plain `ChangeNotifier`; the app is small) |
+| State management | Plain `ChangeNotifier` (`ChapterEditor`, `ChapterAutosaver`) |
 | Long list with stable positions | `scrollable_positioned_list` (jump to index, read which rows are visible) |
 | File access (Android) | `MANAGE_EXTERNAL_STORAGE` ("All files access"), then plain `dart:io` |
 | File change detection | `watcher` package on desktop; folder scan on app resume / regular check on Android |
@@ -107,7 +107,7 @@ Sample dry run on *Az új nap könyve*: 22 chapters, 6,056 rows, 1,769 blank, 1,
 1. ✅ **Model + file format:** parser, serializer, row operations, unit tests.
 2. ✅ **Importer** with tests based on the real sample, plus the CLI tool.
 3. ✅ **Read-only viewer:** pick the book folder, list chapters, side-by-side list with break rows, remember the scroll position, reopen the last chapter on launch.
-4. **Editing:** edit cells in place, autosave, split / join / insert / delete, remarks, undo.
+4. ✅ **Editing:** edit cells in place, autosave, split / join / insert / delete, remarks, undo. Still to check on the phone: the keyboard stays up without flicker on Enter, and the view stays put when the keyboard opens.
 5. **Search.**
 6. **Sync robustness:** detect external changes, reload, show a conflict prompt and banner.
 7. **Polish & packaging:** settings, theme, signed APK to install on the phone, desktop build, import from inside the app. The folder picker should also point out un-imported Markdown files instead of only showing "0 chapter files".
@@ -121,5 +121,9 @@ Sample dry run on *Az új nap könyve*: 22 chapters, 6,056 rows, 1,769 blank, 1,
 - Join merges both sides, after confirmation.
 - On launch the app reopens the last chapter at the saved row; Back goes to the chapter list.
 - `compileSdk` is 37 because `permission_handler` requires it; `targetSdk` still follows Flutter's default.
+- Row actions open from a long press or right-click on any row, or from ⋮ in the app bar while a cell is open. Back, Esc or ✓ closes the open cell.
+- The title row can't be deleted and nothing can be inserted above it, because another row would silently become the title.
+- Until milestone 6, a save overwrites any change Syncthing made to the open chapter's file.
+- Saving drops `#` comment lines, because the parser doesn't keep them.
 - Extras (status, progress, export, glossary) are left out of v1.
 - This file (`ford/plan.md`) is the main copy of the plan.

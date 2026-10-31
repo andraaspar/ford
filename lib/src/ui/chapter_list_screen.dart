@@ -60,7 +60,13 @@ class _ChapterListScreenState extends State<ChapterListScreen> {
         builder: (_) => ChapterScreen(entry: entry, settings: widget.settings),
       ),
     );
-    if (mounted) setState(() {}); // The last-read marker may have moved.
+    if (!mounted) return;
+    // The last-read marker may have moved, and the title may have been edited.
+    try {
+      await _reload();
+    } on Object {
+      return; // The list shows this error.
+    }
   }
 
   @override

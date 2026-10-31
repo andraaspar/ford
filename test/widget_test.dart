@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ford/src/book/book_folder.dart';
+import 'package:ford/src/editing/chapter_editor.dart';
 import 'package:ford/src/model/chapter.dart';
 import 'package:ford/src/model/segment.dart';
 import 'package:ford/src/settings/app_settings.dart';
@@ -26,11 +27,18 @@ void main() {
       await tester.pumpWidget(
         _app(
           ChapterView(
-            chapter: Chapter([
-              Segment(id: 'title', source: 'Title', target: 'Cím'),
-              Segment(id: 'gap01'),
-              Segment(id: 'row01', source: 'One', target: 'Egy', remark: 'Hm'),
-            ]),
+            editor: ChapterEditor(
+              Chapter([
+                Segment(id: 'title', source: 'Title', target: 'Cím'),
+                Segment(id: 'gap01'),
+                Segment(
+                  id: 'row01',
+                  source: 'One',
+                  target: 'Egy',
+                  remark: 'Hm',
+                ),
+              ]),
+            ),
           ),
         ),
       );
@@ -46,9 +54,11 @@ void main() {
       await tester.pumpWidget(
         _app(
           ChapterView(
-            chapter: Chapter([
-              Segment(id: 'row01', source: 'One', remark: 'first\nsecond'),
-            ]),
+            editor: ChapterEditor(
+              Chapter([
+                Segment(id: 'row01', source: 'One', remark: 'first\nsecond'),
+              ]),
+            ),
           ),
         ),
       );
@@ -68,7 +78,7 @@ void main() {
       await tester.pumpWidget(
         _app(
           ChapterView(
-            chapter: _longChapter(),
+            editor: ChapterEditor(_longChapter()),
             initialPosition: const ReadingPosition('row100', 0),
             onPositionChanged: (p) => reported = p,
           ),
@@ -92,7 +102,7 @@ void main() {
       await tester.pumpWidget(
         _app(
           ChapterView(
-            chapter: _longChapter(),
+            editor: ChapterEditor(_longChapter()),
             initialPosition: const ReadingPosition('gone', -0.1),
           ),
         ),
@@ -231,7 +241,7 @@ void main() {
           data: const MediaQueryData(padding: EdgeInsets.only(bottom: 48)),
           child: Scaffold(
             body: ChapterView(
-              chapter: _longChapter(),
+              editor: ChapterEditor(_longChapter()),
               initialPosition: const ReadingPosition('row199', 0),
             ),
           ),
