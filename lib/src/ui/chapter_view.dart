@@ -248,10 +248,6 @@ class RowTile extends StatelessWidget {
     required this.onToggleRemark,
   });
 
-  /// Height of a blank row. Blank rows add up, so three of them are visibly a
-  /// bigger break than one.
-  static const breakHeight = 14.0;
-
   final ChapterEditor editor;
   final Segment segment;
   final bool isTitle;
@@ -270,12 +266,7 @@ class RowTile extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (segment.source.isEmpty &&
-              segment.target.isEmpty &&
-              active == null)
-            _gap()
-          else
-            _sides(context, active),
+          _sides(context, active),
           if (active?.field == Field.remark)
             _RemarkEditor(
               key: ValueKey('${segment.id}/remark'),
@@ -290,24 +281,12 @@ class RowTile extends StatelessWidget {
               collapsed: remarkCollapsed && active == null,
               onTap: onToggleRemark,
             ),
+          Divider(
+            height: 1,
+            thickness: 1,
+            color: Theme.of(context).colorScheme.outlineVariant,
+          ),
         ],
-      ),
-    );
-  }
-
-  /// A blank row is drawn as a short gap; each half of it opens that side.
-  Widget _gap() {
-    Widget half(Field field) => Expanded(
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () => _activate(field, 0),
-      ),
-    );
-    return SizedBox(
-      height: breakHeight,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [half(Field.source), half(Field.target)],
       ),
     );
   }

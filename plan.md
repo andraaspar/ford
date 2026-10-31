@@ -60,7 +60,8 @@ One block per row, with a blank line between blocks. Each field is a single line
 ## Core behaviour
 ### View
 - Two equal columns. Each row is a source cell and a target cell. The remark shows below the row in a muted style with a 💬 marker, and can be collapsed.
-- **Blank rows are drawn as a short gap row**, not a full-height empty row. Three in a row are visibly a bigger gap. Tapping one lets you type into it, which turns it into a normal row.
+- **Blank rows are as tall as a row with one line of text.** Three in a row are visibly a bigger gap. Tapping one lets you type into it, which turns it into a normal row.
+- A horizontal line separates the rows.
 - Rows with a source but no target are visibly marked as untranslated.
 - Tap a cell to edit it in place. Only the active cell is a text field; the rest are plain text, which keeps scrolling fast.
 - Font size and dark/light theme in settings.

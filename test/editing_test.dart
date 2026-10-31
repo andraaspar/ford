@@ -177,23 +177,24 @@ void main() {
       await tester.pumpWidget(_app(editor));
 
       final gap = find.byType(RowTile).at(1);
+      final height = tester.getSize(gap).height;
       await tester.tapAt(tester.getTopRight(gap) + const Offset(-20, 7));
       await tester.pump();
       expect(editor.active?.field, Field.target);
-      expect(tester.getSize(gap).height, greaterThan(RowTile.breakHeight));
+      expect(tester.getSize(gap).height, height);
 
       await tester.enterText(find.byType(TextField), 'x');
       editor.deactivate();
       await tester.pump();
       expect(find.text('x'), findsOneWidget);
-      expect(tester.getSize(gap).height, greaterThan(RowTile.breakHeight));
+      expect(tester.getSize(gap).height, height);
 
       editor.activate('gap', Field.target);
       await tester.pump();
       await tester.enterText(find.byType(TextField), '');
       editor.deactivate();
       await tester.pump();
-      expect(tester.getSize(gap).height, RowTile.breakHeight);
+      expect(tester.getSize(gap).height, height);
     });
   });
 

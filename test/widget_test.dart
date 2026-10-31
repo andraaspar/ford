@@ -21,7 +21,7 @@ Chapter _longChapter() => Chapter([
 
 void main() {
   group('ChapterView', () {
-    testWidgets('shows both sides, remarks and short break rows', (
+    testWidgets('shows both sides, remarks and full-height blank rows', (
       tester,
     ) async {
       await tester.pumpWidget(
@@ -37,6 +37,7 @@ void main() {
                   target: 'Egy',
                   remark: 'Hm',
                 ),
+                Segment(id: 'row02', source: 'Two', target: 'Kettő'),
               ]),
             ),
           ),
@@ -46,8 +47,15 @@ void main() {
       expect(find.text('Title'), findsOneWidget);
       expect(find.text('Cím'), findsOneWidget);
       expect(find.text('💬 Hm'), findsOneWidget);
-      final gap = tester.getSize(find.byType(RowTile).at(1));
-      expect(gap.height, RowTile.breakHeight);
+      final rows = find.byType(RowTile);
+      expect(
+        tester.getSize(rows.at(1)).height,
+        tester.getSize(rows.at(3)).height,
+      );
+      expect(
+        find.descendant(of: rows.at(1), matching: find.byType(Divider)),
+        findsOneWidget,
+      );
     });
 
     testWidgets('tapping a remark collapses it to one line', (tester) async {
