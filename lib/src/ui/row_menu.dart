@@ -8,31 +8,20 @@ Future<void> showRowMenu(
   ChapterEditor editor,
   String rowId,
 ) async {
-  // [context] may be a row that's gone by the time the sheet closes.
-  final navigator = Navigator.of(context);
   final action = await showModalBottomSheet<VoidCallback>(
     context: context,
     showDragHandle: true,
     isScrollControlled: true,
-    builder: (context) => _RowMenu(
-      editor: editor,
-      rowId: rowId,
-      onJoin: () => _confirmJoin(navigator.context, editor, rowId),
-    ),
+    builder: (context) => _RowMenu(editor: editor, rowId: rowId),
   );
   action?.call();
 }
 
 class _RowMenu extends StatelessWidget {
-  const _RowMenu({
-    required this.editor,
-    required this.rowId,
-    required this.onJoin,
-  });
+  const _RowMenu({required this.editor, required this.rowId});
 
   final ChapterEditor editor;
   final String rowId;
-  final VoidCallback onJoin;
 
   @override
   Widget build(BuildContext context) {
@@ -57,11 +46,6 @@ class _RowMenu extends StatelessWidget {
               Icons.vertical_split_outlined,
               'Split at cursor',
               canSplit ? editor.splitAtCaret : null,
-            ),
-            item(
-              Icons.merge,
-              'Join with next row',
-              editor.canJoinWithNext(rowId) ? onJoin : null,
             ),
             item(
               Icons.vertical_align_top,
@@ -91,29 +75,40 @@ class _RowMenu extends StatelessWidget {
   }
 }
 
-Future<void> _confirmJoin(
+/// Merges the active row into the one above it. Asks first if that also moves
+/// text on the other side.
+Future<void> mergeWithPrevious(
   BuildContext context,
   ChapterEditor editor,
-  String rowId,
 ) async {
-  final confirmed = await showDialog<bool>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Join with the next row?'),
-      content: const Text(
-        'Both sides and the remarks of the two rows are merged into one.',
+  if (!editor.canMergeActiveWithPrevious) return;
+  if (editor.activeMergeMovesOtherSide) {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      // The dialog takes the focus, which closes the keyboard. It shouldn't move
+      // while that happens.
+      builder: (context) => MediaQuery.removeViewInsets(
+        context: context,
+        removeBottom: true,
+        child: AlertDialog(
+          title: const Text('Merge with the previous row?'),
+          content: const Text(
+            'Both sides and the remarks of the two rows are merged into one.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Merge'),
+            ),
+          ],
+        ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.of(context).pop(true),
-          child: const Text('Join'),
-        ),
-      ],
-    ),
-  );
-  if (confirmed ?? false) editor.joinWithNext(rowId);
+    );
+    if (!(confirmed ?? false)) return;
+  }
+  editor.mergeActiveWithPrevious();
 }

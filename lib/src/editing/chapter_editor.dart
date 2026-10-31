@@ -148,22 +148,38 @@ class ChapterEditor extends ChangeNotifier {
     _apply(next);
   }
 
-  bool canJoinWithNext(String rowId) {
-    final index = _chapter.indexOfId(rowId);
-    return index >= 0 && index + 1 < _chapter.length;
+  /// Whether the active cell's row can merge into the row above it. Only source
+  /// and target cells can do this, and the title row has nothing above it.
+  bool get canMergeActiveWithPrevious {
+    final active = _active;
+    if (active == null || active.field.side == null) return false;
+    return _chapter.indexOfId(active.rowId) > 0;
   }
 
-  void joinWithNext(String rowId) {
-    if (!canJoinWithNext(rowId)) return;
-    final index = _chapter.indexOfId(rowId);
-    final removedId = _chapter.segments[index + 1].id;
-    final next = _chapter.joinWithNext(index);
+  /// Whether merging also moves text the user isn't looking at: the other side
+  /// of the active row.
+  bool get activeMergeMovesOtherSide {
     final active = _active;
-    if (active != null && active.rowId == removedId) {
-      final length = next.segments[index].field(active.field).length;
-      _active = ActiveCell(rowId, active.field, length);
-    }
-    _apply(next);
+    if (active == null || active.field.side == null) return false;
+    final index = _chapter.indexOfId(active.rowId);
+    if (index < 0) return false;
+    final other = active.field == Field.source ? Field.target : Field.source;
+    return _chapter.segments[index].field(other).isNotEmpty;
+  }
+
+  /// Merges the active row into the row above it, with the caret where the two
+  /// texts meet. The opposite of [splitAtCaret].
+  void mergeActiveWithPrevious() {
+    if (!canMergeActiveWithPrevious) return;
+    final active = _active!;
+    final index = _chapter.indexOfId(active.rowId);
+    final previous = _chapter.segments[index - 1];
+    final before = previous.field(active.field);
+    final moved = _chapter.segments[index].field(active.field);
+    final offset =
+        before.length + (before.isNotEmpty && moved.isNotEmpty ? 1 : 0);
+    _active = ActiveCell(previous.id, active.field, offset);
+    _apply(_chapter.joinWithNext(index - 1));
   }
 
   /// Inserts a blank row (a break) at [index].

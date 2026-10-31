@@ -69,7 +69,7 @@ One block per row, with a blank line between blocks. Each field is a single line
 | Operation | Behaviour |
 |---|---|
 | **Split** (cursor in source *or* target cell; also **Enter**) | The text before the cursor stays in the current row. A new row is inserted below with the text after the cursor on the same side and an **empty** cell on the other side. The remark stays on the original row. |
-| **Join with next** | **Asks for confirmation first**, then merges row *i* and row *i+1*: source = `src_i + " " + src_i+1`, target likewise, remarks joined on separate lines. Empty sides are joined without an extra space. |
+| **Merge with previous** (**Backspace** at the start of a source or target cell) | Merges row *i* into row *i-1*, with the caret where the texts meet: source = `src_i-1 + " " + src_i`, target likewise, remarks joined on separate lines. Empty sides are joined without an extra space. **Asks for confirmation first** only if the other side of row *i* has text; otherwise it simply undoes a split. |
 | Insert blank row (break) / Delete row | From a row menu. Adding or removing a break is just inserting or deleting a blank row. |
 | Undo / redo | For text edits and row operations, kept per session. |
 
@@ -107,7 +107,7 @@ Sample dry run on *Az új nap könyve*: 22 chapters, 6,056 rows, 1,769 blank, 1,
 1. ✅ **Model + file format:** parser, serializer, row operations, unit tests.
 2. ✅ **Importer** with tests based on the real sample, plus the CLI tool.
 3. ✅ **Read-only viewer:** pick the book folder, list chapters, side-by-side list with break rows, remember the scroll position, reopen the last chapter on launch.
-4. ✅ **Editing:** edit cells in place, autosave, split / join / insert / delete, remarks, undo. Checked on the phone: the keyboard stays up through splits, and the open cell stays visible above it. Still to check: Enter and typing on the real keyboard, and how smoothly the keyboard opens in a release build.
+4. ✅ **Editing:** edit cells in place, autosave, split / join / insert / delete, remarks, undo. Being tested by hand on the phone.
 5. **Search.**
 6. **Sync robustness:** detect external changes, reload, show a conflict prompt and banner.
 7. **Polish & packaging:** settings, theme, signed APK to install on the phone, desktop build, import from inside the app. The folder picker should also point out un-imported Markdown files instead of only showing "0 chapter files".
@@ -118,7 +118,8 @@ Sample dry run on *Az új nap könyve*: 22 chapters, 6,056 rows, 1,769 blank, 1,
 - One file per chapter; chapter order comes from file names (no `book.yaml`).
 - Split keeps the new row in the same paragraph; breaks are separate blank rows.
 - Search has a match-case toggle.
-- Join merges both sides, after confirmation.
+- Merging moves both sides. It asks first only if the other side of the row has text.
+- The keyboard slides over the list instead of resizing it, because resizing lays out many rows per animation frame.
 - On launch the app reopens the last chapter at the saved row; Back goes to the chapter list.
 - `compileSdk` is 37 because `permission_handler` requires it; `targetSdk` still follows Flutter's default.
 - Row actions open from a long press or right-click on any row, or from ⋮ in the app bar while a cell is open. Back, Esc or ✓ closes the open cell.

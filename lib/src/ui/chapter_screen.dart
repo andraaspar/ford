@@ -237,6 +237,10 @@ class _ChapterScreenState extends State<ChapterScreen>
         child: Focus(
           autofocus: true,
           child: Scaffold(
+            // The keyboard slides over the list. Resizing the list for each step
+            // of its animation would lay out many rows per frame, which is slow
+            // on a phone.
+            resizeToAvoidBottomInset: false,
             appBar: AppBar(
               title: Text(
                 editor.chapter.title ?? widget.entry.fileName,

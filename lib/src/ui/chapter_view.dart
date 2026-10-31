@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
@@ -210,9 +212,16 @@ class _ChapterViewState extends State<ChapterView> {
       initialAlignment: _initialAlignment,
       itemScrollController: _scroll,
       itemPositionsListener: _positions,
-      // Lets the last row scroll clear of the system navigation bar.
+      // Lets the last row scroll clear of the system navigation bar and, while
+      // a cell is open, of the keyboard. The keyboard's actual height doesn't
+      // matter here, which keeps its animation from changing the layout.
       padding: EdgeInsets.only(
-        bottom: MediaQuery.paddingOf(context).bottom + 32,
+        bottom:
+            MediaQuery.paddingOf(context).bottom +
+            32 +
+            (_editor.active == null
+                ? 0
+                : MediaQuery.sizeOf(context).height * 0.75),
       ),
       itemBuilder: (context, index) {
         final segment = chapter.segments[index];
@@ -422,6 +431,46 @@ class _BoundField extends StatefulWidget {
   State<_BoundField> createState() => _BoundFieldState();
 }
 
+/// Keeps [_startGuard] at the start of the text and reports its deletion.
+class _StartGuardFormatter extends TextInputFormatter {
+  _StartGuardFormatter(this.onDeleted);
+
+  final VoidCallback onDeleted;
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    if (oldValue.text.startsWith(_startGuard) &&
+        newValue.text == oldValue.text.substring(1)) {
+      onDeleted();
+      return oldValue;
+    }
+    if (newValue.text.startsWith(_startGuard)) return newValue;
+    int shift(int offset) => offset < 0 ? offset : offset + 1;
+    final composing = newValue.composing;
+    return TextEditingValue(
+      text: '$_startGuard${newValue.text}',
+      selection: newValue.selection.copyWith(
+        baseOffset: shift(newValue.selection.baseOffset),
+        extentOffset: shift(newValue.selection.extentOffset),
+      ),
+      composing: TextRange(
+        start: shift(composing.start),
+        end: shift(composing.end),
+      ),
+    );
+  }
+}
+
+/// An invisible character kept before the text of source and target cells.
+///
+/// Android keyboards usually send nothing for Backspace when there's nothing
+/// before the caret. With this there always is, and its deletion tells us about
+/// the key press. It never leaves the text field.
+const _startGuard = '\u200B';
+
 class _BoundFieldState extends State<_BoundField>
     with AutomaticKeepAliveClientMixin {
   /// Source and target are one line each: Enter splits the row, and line breaks
@@ -437,12 +486,16 @@ class _BoundFieldState extends State<_BoundField>
   @override
   bool get wantKeepAlive => true;
 
+  bool get _isSplittable => widget.field.side != null;
+
+  String get _prefix => _isSplittable ? _startGuard : '';
+
   TextEditingValue _valueAtCaret() {
     final length = widget.text.length;
     final offset = (widget.editor.active?.offset ?? length).clamp(0, length);
     return TextEditingValue(
-      text: widget.text,
-      selection: TextSelection.collapsed(offset: offset),
+      text: '$_prefix${widget.text}',
+      selection: TextSelection.collapsed(offset: offset + _prefix.length),
     );
   }
 
@@ -466,7 +519,9 @@ class _BoundFieldState extends State<_BoundField>
   void didUpdateWidget(_BoundField oldWidget) {
     super.didUpdateWidget(oldWidget);
     // Undo and redo change the text from outside.
-    if (widget.text != _controller.text) _controller.value = _valueAtCaret();
+    if ('$_prefix${widget.text}' != _controller.text) {
+      _controller.value = _valueAtCaret();
+    }
   }
 
   @override
@@ -478,9 +533,24 @@ class _BoundFieldState extends State<_BoundField>
 
   void _onControllerChanged() {
     final selection = _controller.selection;
-    if (selection.isValid && _isActive) {
-      widget.editor.moveCaret(selection.start);
+    if (!selection.isValid) return;
+    // Keeps the guard out of reach of the caret, and out of anything copied.
+    final first = _prefix.length;
+    if (selection.baseOffset < first || selection.extentOffset < first) {
+      _controller.selection = selection.copyWith(
+        baseOffset: selection.baseOffset < first ? first : null,
+        extentOffset: selection.extentOffset < first ? first : null,
+      );
+      return;
     }
+    if (_isActive) widget.editor.moveCaret(selection.start - first);
+  }
+
+  void _onBackspaceAtStart() {
+    // This is called while the text field is working out its new value.
+    scheduleMicrotask(() {
+      if (mounted) unawaited(mergeWithPrevious(context, widget.editor));
+    });
   }
 
   bool get _isActive {
@@ -491,7 +561,7 @@ class _BoundFieldState extends State<_BoundField>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final splitsOnEnter = widget.field.side != null;
+    final splitsOnEnter = _isSplittable;
     return TextField(
       controller: _controller,
       focusNode: _focusNode,
@@ -503,11 +573,24 @@ class _BoundFieldState extends State<_BoundField>
       textInputAction: splitsOnEnter
           ? TextInputAction.done
           : TextInputAction.newline,
-      inputFormatters: splitsOnEnter ? [_noLineBreaks] : null,
+      inputFormatters: splitsOnEnter
+          ? [_noLineBreaks, _StartGuardFormatter(_onBackspaceAtStart)]
+          : null,
+      // The list doesn't shrink for the keyboard, so the caret has to be kept
+      // clear of it here.
+      scrollPadding: EdgeInsets.fromLTRB(
+        20,
+        20,
+        20,
+        20 + MediaQuery.viewInsetsOf(context).bottom,
+      ),
       // No decoration, so that opening a cell doesn't change the row's height.
       decoration: null,
-      onChanged: (text) =>
-          widget.editor.setText(widget.rowId, widget.field, text),
+      onChanged: (text) => widget.editor.setText(
+        widget.rowId,
+        widget.field,
+        text.substring(_prefix.length),
+      ),
       onSubmitted: splitsOnEnter ? (_) => widget.editor.splitAtCaret() : null,
       // These two keep the cell open: it closes only when another one is tapped
       // or editing is finished, not when a toolbar button is clicked.

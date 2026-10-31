@@ -113,8 +113,8 @@ void main() {
       expect(editor.chapter.segments[1].remark, 'r');
       expect(editor.chapter.segments[2].source, 'two');
       final field = tester.widget<TextField>(find.byType(TextField));
-      expect(field.controller!.text, 'two');
-      expect(field.controller!.selection.baseOffset, 0);
+      expect(field.controller!.text, '\u200Btwo');
+      expect(field.controller!.selection.baseOffset, 1);
       expect(field.focusNode!.hasFocus, isTrue);
       expect(tester.testTextInput.isVisible, isTrue);
       await tester.pump(const Duration(seconds: 1));
@@ -161,7 +161,7 @@ void main() {
       await tester.pump();
 
       final field = tester.widget<TextField>(find.byType(TextField));
-      expect(field.controller!.text, 'source 1');
+      expect(field.controller!.text, '\u200Bsource 1');
     });
 
     testWidgets('a blank row opens on the tapped side and stays a row while '
@@ -194,6 +194,153 @@ void main() {
       editor.deactivate();
       await tester.pump();
       expect(tester.getSize(gap).height, RowTile.breakHeight);
+    });
+  });
+
+  group('Backspace at the start of a cell', () {
+    Future<ChapterEditor> openAtStart(
+      WidgetTester tester,
+      List<Segment> rows,
+      String rowId,
+      Field field,
+    ) async {
+      final editor = _editor(Chapter(rows), tester);
+      await tester.pumpWidget(_app(editor));
+      editor.activate(rowId, field, offset: 0);
+      await tester.pump();
+      await tester.pump();
+      return editor;
+    }
+
+    // What the keyboard reports when Backspace deletes the invisible guard.
+    Future<void> backspace(WidgetTester tester, String textLeft) async {
+      tester.testTextInput.updateEditingValue(
+        TextEditingValue(
+          text: textLeft,
+          selection: const TextSelection.collapsed(offset: 0),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      await tester.pump();
+    }
+
+    testWidgets('merges at once when the other side is empty', (tester) async {
+      final editor = await openAtStart(
+        tester,
+        [
+          Segment(id: 't', source: 'T', target: 'C'),
+          Segment(id: 'a', source: 'One', target: 'Egy'),
+          Segment(id: 'b', source: '', target: 'kettő'),
+        ],
+        'b',
+        Field.target,
+      );
+
+      await backspace(tester, 'kettő');
+
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(editor.chapter.segments[1].target, 'Egy kettő');
+      final field = tester.widget<TextField>(find.byType(TextField));
+      expect(field.controller!.text, '\u200BEgy kettő');
+      expect(field.controller!.selection.baseOffset, 1 + 'Egy '.length);
+      expect(field.focusNode!.hasFocus, isTrue);
+      expect(tester.testTextInput.isVisible, isTrue);
+    });
+
+    testWidgets('asks first when the other side has text', (tester) async {
+      final rows = [
+        Segment(id: 't', source: 'T', target: 'C'),
+        Segment(id: 'a', source: 'One', target: 'Egy'),
+        Segment(id: 'b', source: 'Two', target: 'Kettő'),
+      ];
+      final editor = await openAtStart(tester, rows, 'b', Field.source);
+
+      await backspace(tester, 'Two');
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(editor.chapter.length, 3);
+      expect(editor.active?.rowId, 'b');
+      final kept = tester.widget<TextField>(find.byType(TextField));
+      expect(kept.controller!.text, '\u200BTwo');
+      expect(kept.focusNode!.hasFocus, isTrue);
+
+      await backspace(tester, 'Two');
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Merge'));
+      await tester.pumpAndSettle();
+      expect(editor.chapter.segments[1].source, 'One Two');
+      expect(editor.chapter.segments[1].target, 'Egy Kettő');
+      final merged = tester.widget<TextField>(find.byType(TextField));
+      expect(merged.focusNode!.hasFocus, isTrue);
+    });
+
+    testWidgets('does nothing in the title row', (tester) async {
+      final editor = await openAtStart(
+        tester,
+        [Segment(id: 't', source: 'T'), Segment(id: 'a', source: 'One')],
+        't',
+        Field.source,
+      );
+
+      await backspace(tester, 'T');
+
+      expect(editor.chapter.length, 2);
+      final field = tester.widget<TextField>(find.byType(TextField));
+      expect(field.controller!.text, '\u200BT');
+    });
+
+    testWidgets('the guard stays out of the text and out of a selection', (
+      tester,
+    ) async {
+      final editor = await openAtStart(
+        tester,
+        [Segment(id: 't', source: 'T'), Segment(id: 'a', source: 'One')],
+        'a',
+        Field.source,
+      );
+      final field = tester.widget<TextField>(find.byType(TextField));
+
+      field.controller!.selection = const TextSelection(
+        baseOffset: 0,
+        extentOffset: 4,
+      );
+      await tester.pump();
+      expect(field.controller!.selection.start, 1);
+      expect(field.controller!.selection.end, 4);
+
+      field.controller!.selection = const TextSelection.collapsed(offset: 4);
+      await tester.pump();
+      tester.testTextInput.updateEditingValue(
+        const TextEditingValue(
+          text: '\u200BOne!',
+          selection: TextSelection.collapsed(offset: 5),
+        ),
+      );
+      await tester.pump();
+      expect(editor.chapter.segments[1].source, 'One!');
+      expect(editor.active?.offset, 4);
+    });
+
+    testWidgets('a remark has no guard, and Backspace there doesn\'t merge', (
+      tester,
+    ) async {
+      final editor = await openAtStart(
+        tester,
+        [
+          Segment(id: 't', source: 'T'),
+          Segment(id: 'a', source: 'One', remark: 'r'),
+        ],
+        'a',
+        Field.remark,
+      );
+      final field = tester.widget<TextField>(find.byType(TextField));
+      expect(field.controller!.text, 'r');
+
+      await backspace(tester, 'r');
+
+      expect(editor.chapter.length, 2);
     });
   });
 
@@ -230,11 +377,13 @@ void main() {
       'insert below': (e, top) =>
           e.insertBlank(e.chapter.indexOfId('row${top + 3}') + 1),
       'delete below': (e, top) => e.delete('row${top + 3}'),
-      'join below': (e, top) => e.joinWithNext('row${top + 3}'),
+      'merge below': (e, top) {
+        e.activate('row${top + 3}', Field.source, offset: 0);
+        e.mergeActiveWithPrevious();
+      },
       'insert above': (e, top) =>
           e.insertBlank(e.chapter.indexOfId('row${top - 3}')),
       'delete above': (e, top) => e.delete('row${top - 3}'),
-      'join above': (e, top) => e.joinWithNext('row${top - 3}'),
       'split below and undo': (e, top) {
         e.activate('row${top + 3}', Field.source);
         e.splitAtCaret();
@@ -356,24 +505,6 @@ void main() {
       await tester.pumpAndSettle();
       return editor;
     }
-
-    testWidgets('joining asks first', (tester) async {
-      final editor = await open(tester, 'source 1');
-
-      await tester.tap(find.text('Join with next row'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Cancel'));
-      await tester.pumpAndSettle();
-      expect(editor.chapter.length, 200);
-
-      await tester.longPress(find.text('source 1'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Join with next row'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Join'));
-      await tester.pumpAndSettle();
-      expect(editor.chapter.segments[1].source, 'source 1 source 2');
-    });
 
     testWidgets('inserts blank rows and deletes', (tester) async {
       final editor = await open(tester, 'source 1');
@@ -538,6 +669,69 @@ void main() {
       expect(find.text('Szöveg'), findsOneWidget);
       await press(LogicalKeyboardKey.keyY);
       expect(find.text('Szöveg'), findsNothing);
+    });
+
+    group('with the keyboard', () {
+      Future<void> setKeyboard(WidgetTester tester, double height) async {
+        tester.view.viewInsets = FakeViewPadding(
+          bottom: height * tester.view.devicePixelRatio,
+        );
+        await tester.pump();
+        await tester.pump();
+      }
+
+      setUp(() {
+        final b = StringBuffer();
+        for (var i = 0; i < 60; i++) {
+          b.write('@ row$i\n< source $i\n> target $i\n\n');
+        }
+        file.writeAsStringSync(b.toString());
+      });
+
+      testWidgets('it slides over the list without changing its size', (
+        tester,
+      ) async {
+        addTearDown(tester.view.resetViewInsets);
+        await openChapter(tester);
+        final list = find.byType(ChapterView);
+        final size = tester.getSize(list);
+        await tester.tap(find.text('target 1'));
+        await tester.pump();
+        await tester.pump();
+        final top = tester.getTopLeft(find.text('source 3')).dy;
+
+        for (final height in [50.0, 150.0, 300.0]) {
+          await setKeyboard(tester, height);
+          expect(tester.getSize(list), size);
+          expect(tester.getTopLeft(find.text('source 3')).dy, top);
+        }
+        for (final height in [150.0, 0.0]) {
+          await setKeyboard(tester, height);
+          expect(tester.getSize(list), size);
+          expect(tester.getTopLeft(find.text('source 3')).dy, top);
+        }
+      });
+
+      testWidgets('a cell it would cover scrolls clear of it', (tester) async {
+        addTearDown(tester.view.resetViewInsets);
+        await openChapter(tester);
+        await tester.tap(find.text('target 15'));
+        await tester.pump();
+        await tester.pump();
+
+        const keyboard = 300.0;
+        for (final height in [100.0, 200.0, keyboard]) {
+          await setKeyboard(tester, height);
+          await tester.pump(const Duration(milliseconds: 150));
+          await tester.pump(const Duration(milliseconds: 150));
+        }
+
+        final bottom = tester.getBottomLeft(find.byType(TextField)).dy;
+        final screen =
+            tester.view.physicalSize.height / tester.view.devicePixelRatio;
+        expect(bottom, lessThanOrEqualTo(screen - keyboard));
+        expect(tester.takeException(), isNull);
+      });
     });
 
     testWidgets('Escape finishes editing', (tester) async {

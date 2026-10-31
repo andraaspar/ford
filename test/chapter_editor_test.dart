@@ -121,11 +121,61 @@ void main() {
       expect(editor.chapter.indexOfId('t'), 0);
     });
 
-    test('joining into the active row keeps it active', () {
-      editor.activate('b', Field.target);
-      editor.joinWithNext('a');
+    test('merging joins into the row above, caret where the texts meet', () {
+      editor.activate('b', Field.target, offset: 0);
+      editor.mergeActiveWithPrevious();
+
+      expect(editor.chapter.length, 2);
+      expect(editor.chapter.segments[1].target, 'Egy Három');
+      expect(editor.chapter.segments[1].source, 'One two Three');
       expect(editor.active?.rowId, 'a');
-      expect(editor.active?.offset, 'Egy Három'.length);
+      expect(editor.active?.field, Field.target);
+      expect(editor.active?.offset, 'Egy '.length);
+    });
+
+    test('merging is the opposite of splitting', () {
+      editor.activate('a', Field.source, offset: 3);
+      editor.splitAtCaret();
+      expect(editor.activeMergeMovesOtherSide, isFalse);
+      editor.mergeActiveWithPrevious();
+
+      expect(editor.chapter.segments, _sample().segments);
+      expect(editor.active?.rowId, 'a');
+      expect(editor.active?.offset, 4);
+    });
+
+    test('merging out of a blank row just removes the break', () {
+      final ed = ChapterEditor(
+        Chapter([Segment(id: 'a', source: 'One'), Segment(id: 'gap')]),
+      );
+      ed.activate('gap', Field.source);
+      ed.mergeActiveWithPrevious();
+      expect(ed.chapter.segments.single.source, 'One');
+      expect(ed.active?.offset, 3);
+    });
+
+    test('merge needs confirming only with text on the other side', () {
+      editor.activate('b', Field.source);
+      expect(editor.activeMergeMovesOtherSide, isTrue);
+      final ed = ChapterEditor(
+        Chapter([
+          Segment(id: 'a', source: 'One', target: 'Egy'),
+          Segment(id: 'b', source: 'Two'),
+        ]),
+      );
+      ed.activate('b', Field.source);
+      expect(ed.activeMergeMovesOtherSide, isFalse);
+      ed.activate('b', Field.target);
+      expect(ed.activeMergeMovesOtherSide, isTrue);
+    });
+
+    test('the title row and remarks don\'t merge', () {
+      editor.activate('t', Field.source);
+      expect(editor.canMergeActiveWithPrevious, isFalse);
+      editor.activate('a', Field.remark);
+      expect(editor.canMergeActiveWithPrevious, isFalse);
+      editor.mergeActiveWithPrevious();
+      expect(editor.chapter.length, 3);
     });
   });
 
